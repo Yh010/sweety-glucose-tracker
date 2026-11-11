@@ -12,6 +12,7 @@ const postgres = new EmbeddedPostgres({
   password: 'sweety_local',
   port: 5432,
   persistent: true,
+  initdbFlags: ['--encoding=UTF8', '--locale=C'],
   authMethod: 'scram-sha-256',
   autoRehydrateSymlinks: true,
   postgresFlags: ['-h', '127.0.0.1'],
@@ -24,7 +25,10 @@ const client = postgres.getPgClient();
 await client.connect();
 for (const database of ['sweety', 'sweety_test']) {
   const existing = await client.query('SELECT 1 FROM pg_database WHERE datname=$1', [database]);
-  if (!existing.rowCount) await client.query(`CREATE DATABASE ${database}`);
+  if (!existing.rowCount)
+    await client.query(
+      `CREATE DATABASE ${database} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`,
+    );
 }
 await client.end();
 console.log('Local PostgreSQL is ready on 127.0.0.1:5432. Press Ctrl+C to stop.');

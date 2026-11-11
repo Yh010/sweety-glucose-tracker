@@ -9,10 +9,46 @@ export class ApiError extends Error {
     super(message);
   }
 }
+let sessionGeneration = 0;
+export function advanceSession() {
+  sessionGeneration += 1;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   read: (response: Response) => Promise<T> = (response) => response.json() as Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  const generation = sessionGeneration;
+  try {
+    const result = await performRequest(
+      path,
+      { ...options, signal: controller.signal },
+      read,
+      generation,
+    );
+    if (generation !== sessionGeneration)
+      throw new ApiError(0, 'SESSION_CHANGED', 'Your session changed. Please try again.');
+    return result;
+  } catch (error) {
+    if (controller.signal.aborted)
+      throw new ApiError(
+        0,
+        'REQUEST_TIMEOUT',
+        'This request took too long. Check the log before trying again. Your inputs are still here.',
+      );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function performRequest<T>(
+  path: string,
+  options: RequestInit = {},
+  read: (response: Response) => Promise<T> = (response) => response.json() as Promise<T>,
+  generation: number,
 ): Promise<T> {
   let response: Response;
   try {
@@ -41,7 +77,7 @@ async function request<T>(
       payload?.error?.code ?? 'REQUEST_FAILED',
       payload?.error?.message ?? 'Something went wrong. Please try again.',
     );
-    if (response.status === 401 && !path.startsWith('/auth/'))
+    if (generation === sessionGeneration && response.status === 401 && !path.startsWith('/auth/'))
       window.dispatchEvent(new Event('session-expired'));
     throw error;
   }

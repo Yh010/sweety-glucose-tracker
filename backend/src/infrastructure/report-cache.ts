@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
+import { cachedReportSchema } from '../modules/reports/schema.js';
 import type { Report } from '../modules/reports/service.js';
 
 export class ReportCache {
@@ -13,7 +14,9 @@ export class ReportCache {
     if (this.redis.status !== 'ready') return null;
     try {
       const value = await this.redis.get(this.key(key));
-      return value ? (JSON.parse(value) as Report) : null;
+      if (!value) return null;
+      const parsed = cachedReportSchema.safeParse(JSON.parse(value));
+      return parsed.success ? parsed.data : null;
     } catch {
       return null;
     }

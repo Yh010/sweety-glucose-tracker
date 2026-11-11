@@ -90,6 +90,8 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
     cara = await register('Cara');
   });
   beforeEach(async () => {
+    const keys = await redis.keys(`${prefix}:reports:*`);
+    if (keys.length) await redis.del(...keys);
     await pool.query('DELETE FROM reminder_events');
     await pool.query('DELETE FROM readings');
     await pool.query('UPDATE users SET report_version=report_version+1');
@@ -105,6 +107,51 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
     if (admin) {
       await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
       await admin.end();
+    }
+  });
+  test('a full 31-day month keeps all 124 entries in reports, CSV and pagination', async () => {
+    await pool.query(
+      `INSERT INTO readings(id,user_id,date,slot,value)
+      SELECT gen_random_uuid(),$1,day::date,slot,40+extract(day from day)::int
+      FROM generate_series('2026-10-01'::date,'2026-10-31'::date,'1 day') day
+      CROSS JOIN unnest(ARRAY['fasting','after_breakfast','after_lunch','after_dinner']) slot`,
+      [alice.id],
+    );
+    const response = await call('/reports?date=2026-10-31&period=mtd');
+    assert.equal(response.status, 200);
+    const full = await response.json();
+    assert.equal(full.summary.count, 124);
+    assert.equal(full.readings.length, 124);
+    assert.equal(full.summary.lowest, 41);
+    assert.equal(full.summary.highest, 71);
+    assert.equal(full.summary.average, 56);
+    assert.deepEqual(await (await call('/reports?date=2026-10-31&period=mtd')).json(), full);
+    const csv = await call('/reports/export?date=2026-11-11&period=monthly');
+    assert.equal(csv.status, 200);
+    assert.equal((await csv.text()).trim().split('\r\n').length, 125);
+    const first = await (
+      await call('/readings?from=2026-10-01&to=2026-10-31&limit=100&page=1')
+    ).json();
+    const second = await (
+      await call('/readings?from=2026-10-01&to=2026-10-31&limit=100&page=2')
+    ).json();
+    assert.equal(first.readings.length, 100);
+    assert.equal(second.readings.length, 24);
+    assert.equal(
+      new Set([...first.readings, ...second.readings].map((r: { id: string }) => r.id)).size,
+      124,
+    );
+  });
+  test('malformed cache records fall back to the database', async () => {
+    await add(131);
+    await report();
+    const keys = await redis.keys(`${prefix}:reports:${alice.id}:*`);
+    assert.equal(keys.length, 1);
+    for (const value of ['{', '{}', '{"summary":{"count":1}}']) {
+      await redis.set(keys[0]!, value);
+      const response = await report();
+      assert.equal(response.summary.average, 131);
+      assert.equal(response.readings.length, 1);
     }
   });
   test('reports are cached per patient, have bounded retention, and invalidate on create/edit/delete', async () => {

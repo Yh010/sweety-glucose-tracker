@@ -1,62 +1,63 @@
 # End-to-end QA report
 
-Tested on 11 November 2026 using Google Chrome, real Node/Express servers and PostgreSQL. The expanded audit used separate frontend/API ports (5174/4001) and the disposable sweety_test database, preserving the demo database. Browser failures were simulated only for the explicit recovery cases; successful workflows used the actual API and database.
+Tested on 11 November 2026 with Google Chrome, Node.js 24, Express, PostgreSQL 18 and a real Redis-compatible server on Windows. CI runs the same suites with PostgreSQL 18 and Redis 7 on Ubuntu.
 
 ## Results
 
 | Check | Result |
 | --- | --- |
-| Desktop browser scenarios | 11 passed |
-| Mobile browser scenarios | 11 passed |
-| Backend unit/integration tests | 25 passed |
-| Redis/BullMQ/CSV integration tests | 5 passed |
-| Frontend unit/component tests | 11 passed |
-| Backend and frontend production builds | Passed |
-| Formatting | Passed |
-| Automated WCAG checks inside account/report flows | Zero violations |
+| Desktop browser scenarios | 18 passed |
+| Mobile browser scenarios | 18 passed |
+| Backend unit/integration tests | 26 passed |
+| Redis/BullMQ/CSV integration tests | 7 passed |
+| Frontend unit/component tests | 15 passed |
+| Backend/frontend production builds and strict type checks | Passed |
+| Automated accessibility checks in browser flows | Zero violations |
 | Responsive widths | No horizontal overflow at 320, 390, 768 and 1440 pixels |
 
-## Gaps reproduced and fixed
+The browser suite runs against dedicated servers on ports 5174/4001 and a random schema in TEST_DATABASE_URL. It never reuses the demo servers. A random token authorizes shutdown of these test-only servers; teardown removes only its validated schema. No shutdown endpoint is included in the application server or production build. The isolated browser API permits 1,000 authentication attempts per window; the normal app retains 30 attempts per IP per 15 minutes. An integration test independently verifies throttling and Retry-After without blocking health/profile reads.
 
-| Finding | Reproduction | Correction and verification |
-| --- | --- | --- |
-| Failed deletion did not retry | Interrupt DELETE, restore connectivity, choose Try again; the reading stayed present | The retry action now sends DELETE again. Browser tests confirm the reading disappears and the summary updates |
-| Date could change during a pending save | Hold a real save request and inspect the date input and navigation | Date input and both navigation buttons are disabled while a write is pending. Tests verify the disabled state and one successful request |
-| Midnight changed the selected journal date | Type a draft, advance metadata to the next day | The chosen day stays selected and the typed value remains. Today still updates the allowed date boundary |
+## Gaps addressed in this audit
 
-Each gap was observed on the original implementation before the corresponding fix. The final complete audit run passed all 18 browser scenarios. Two additional desktop/mobile dev-server checks then passed without requiring an app change, bringing coverage to 20 browser scenarios.
+| Finding | Correction and verification |
+| --- | --- |
+| Logout in one tab leaves another showing patient data | Explicit authentication changes signal other tabs, clear patient caches and recheck the session. Ordinary tab focus does not reload the page or reset form inputs |
+| A request that never finishes leaves Saving active indefinitely | Requests abort after 20 seconds; the form becomes usable and keeps its draft. Browser clock testing confirms recovery and a subsequent successful save |
+| A save commits but its response is lost, leaving the log stale | Failed writes refresh reports while retaining inputs; retries show the existing slot instead of creating duplicate records |
+| A deletion commits but its response is lost | Failed deletion refreshes the journal; retry treats an already absent reading as successful deletion |
+| A delayed response from a previous session affects the current session | Session generations prevent late old 401 responses from expiring a new session and discard exports that finish after an account change |
+| Valid JSON with an invalid cached report shape reaches the browser | Runtime validation rejects malformed cache records and rebuilds reports from PostgreSQL |
+| Windows local database encoding rejects Unicode names | Local database initialization and creation explicitly use UTF-8. The existing local journal was copied to UTF-8 databases with all account/session/reading/reminder row counts verified; original databases were retained |
+
+Earlier regression checks remain: deletion retry actually retries, pending writes lock date navigation, midnight metadata updates preserve the chosen day and draft, and generated test HTML does not reload the login page.
 
 ## Coverage
 
-- Registration, duplicate emails with different case, incorrect login, retained credentials after errors, password visibility, logout, login again, and account switching without cached readings leaking between accounts.
-- Required values, below/above limits, decimals, inclusive values 40 and 600, future dates, duplicate slots, four-reading cap, keyboard Enter submission, edit conflicts, moving a reading to another date, cancellation and confirmed deletion.
-- Daily table slot ordering; exact minimum/maximum/count/rounded averages; month-to-date cutoff; full previous month; excluded dates outside ranges; leap-day February; December/January boundaries; zero/null empty state and chart rendering.
-- Page reload persistence, expired sessions, initial request failure/retry, failed saves with retained drafts, failed deletion/retry, background metadata failure, midnight change and delayed requests.
-- Generated test HTML updates do not navigate or clear the login page. Vite reload notices for report pages were investigated and did not reproduce an app reload.
-- Login/registration drafts across a simulated 61-second background/foreground transition, with no new profile requests or logged-out polling.
-- An 80-character name, responsive layout bounds, automated accessibility checks and desktop/mobile report screenshots attached to the Playwright HTML report.
+- Accounts: registration/login, duplicate case-insensitive email, incorrect credentials, password visibility and UTF-8 byte limit, retained fields after failure, logout/relogin, session expiry, ownership and account switching, cross-tab logout, authentication throttling.
+- Readings: required/invalid/nonnumeric/fractional/out-of-range inputs, inclusive 40/600 boundaries, valid slots, invalid calendar/future dates, all four slots and fifth-entry prevention, duplicate and concurrent submissions, keyboard submission, edit conflicts, moving dates, cancellation, confirmed deletion and deletion retry.
+- Recovery: failed reads/retry, rejected saves, drafts during background metadata errors and midnight changes, delayed writes, connection loss after a save/delete commits, stalled saves, old-session responses, failed CSV download/retry.
+- Reports: slot ordering, exact count/min/max/one-decimal average, daily/MTD/full previous month, excluded dates, leap years, December/January boundaries, empty reports and chart rendering.
+- Capacity: a complete 31-day month retains all 124 readings in reports and CSV; pagination returns 100 plus 24 distinct entries without truncation.
+- Extras: per-patient versioned cache, bounded retention, create/edit/delete invalidation, late old cache writes, malformed JSON and malformed report shapes, fallback with a disconnected optional cache, CSV BOM/CRLF/range/ownership/empty exports, actual BullMQ processing, timezone scheduling, reminder deduplication and complete-day exclusion.
+- UX: next-slot suggestions, draft preservation, full-day guidance, date entry on complete days, Today shortcut, export loading controls, Unicode/long names, responsive bounds, automated accessibility checks, login/registration drafts across background/foreground transitions without additional profile requests.
 
 ## Re-run
 
-With the development database and app configuration ready:
+Keep PostgreSQL running and configure TEST_DATABASE_URL to a disposable database ending in `_test`. Configure TEST_REDIS_URL or REDIS_URL for extras tests.
 
 ```sh
 npm test --prefix backend
+npm run test:extras --prefix backend
 npm test --prefix frontend
 npm run test:e2e --prefix frontend
+npm run typecheck --prefix backend
 npm run build --prefix backend
 npm run build --prefix frontend
 npm run format:check --prefix frontend
 ```
 
-The Playwright HTML report is generated under frontend/playwright-report (not committed). GitHub Actions uploads it as the browser-results artifact on successful and failed runs. Verified [desktop](qa-screenshots/previous-month-desktop.png) and [mobile](qa-screenshots/previous-month-mobile.png) captures are committed. Browser tests use unique synthetic accounts. Use a disposable database for repeat QA. Existing backend tests isolate themselves in a random schema and clean up that schema.
+Playwright writes frontend/playwright-report and frontend/test-results (ignored by Git). GitHub Actions uploads them as the browser-results artifact on success and failure. Only synthetic accounts are used. Backend tests and extras tests use their own random schemas and Redis prefixes.
 
 ## Limits
 
-Mobile coverage is Chromium phone emulation, not a physical iPhone or Safari. Firefox and WebKit have not been tested. Automated accessibility checks do not replace a complete manual screen-reader review. Docker Compose has not been executed locally; PostgreSQL-backed CI runs separately. No public app deployment was tested. There are no outstanding failures in the tested scope; these checks do not prove the absence of every possible defect.
-
-## Bonus-feature regression run
-
-The complete 22-scenario browser suite passed after adding CSV export, completion guidance, Today navigation and next-slot suggestions. The real download includes exactly the selected range, loading controls prevent changing the range mid-download, and empty reports disable export. Completing a day leaves its date field usable and disables the fifth entry. Suggested-slot changes do not clear a draft; revisiting the app chooses the next unfilled slot.
-
-Five integration tests use PostgreSQL plus Redis/BullMQ; run npm run test:extras --prefix backend with TEST_REDIS_URL or REDIS_URL set. The optional worker is log-only and sends no notifications. The test API uses a non-watch startup command to avoid an extra Windows development watcher during cleanup.
+Mobile coverage is Chromium phone emulation, not a physical iPhone or Safari. Firefox and WebKit are untested. Automated accessibility checks do not replace manual screen-reader review. Docker Compose was not run locally because Docker is unavailable. No public deployment, multi-instance failover, production-scale load benchmark or live PostgreSQL/Redis service restart was tested. Cache disconnection and browser request failures were exercised without stopping shared services. These checks establish behavior in the tested scope, not proof that every possible defect is absent.

@@ -49,6 +49,7 @@ jobs:
       - run: npm run test:extras --prefix backend
       - run: npm test --prefix frontend
       - run: npm run build --prefix frontend
+      - run: npm run format:check --prefix frontend
       # Chrome is included in the hosted Ubuntu image; avoid a second apt/browser install.
       - run: google-chrome --version
       - run: npm run test:e2e --prefix frontend

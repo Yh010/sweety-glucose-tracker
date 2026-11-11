@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError } from './lib/api';
+import { api, ApiError, advanceSession } from './lib/api';
 import type { User } from './lib/types';
 import { AppShell, type View } from './components/AppShell';
 import { ErrorState, Loading } from './components/Feedback';
 import { AuthPage } from './features/auth/AuthPage';
 import { DailyPage } from './features/readings/DailyPage';
 import { ReportsPage } from './features/reports/ReportsPage';
+
+function announceSessionChange() {
+  advanceSession();
+  try {
+    localStorage.setItem('sweety-session-change', crypto.randomUUID());
+  } catch {
+    /* Storage can be disabled by the browser. */
+  }
+}
 
 export default function App() {
   const client = useQueryClient();
@@ -34,6 +43,19 @@ export default function App() {
     refetchInterval: 60000,
   });
   useEffect(() => {
+    function synchronize(event: StorageEvent) {
+      if (event.key !== 'sweety-session-change') return;
+      advanceSession();
+      void client.cancelQueries().then(() => {
+        client.removeQueries({
+          predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
+        });
+        client.setQueryData(['me'], null);
+        setView('daily');
+        void client.invalidateQueries({ queryKey: ['me'] });
+      });
+    }
+    window.addEventListener('storage', synchronize);
     function expire() {
       void client.cancelQueries().then(() => {
         client.removeQueries({
@@ -44,11 +66,15 @@ export default function App() {
       });
     }
     window.addEventListener('session-expired', expire);
-    return () => window.removeEventListener('session-expired', expire);
+    return () => {
+      window.removeEventListener('session-expired', expire);
+      window.removeEventListener('storage', synchronize);
+    };
   }, [client]);
   const logout = useMutation({
     mutationFn: api.logout,
     onSuccess: async () => {
+      announceSessionChange();
       await client.cancelQueries();
       client.removeQueries({
         predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
@@ -59,6 +85,7 @@ export default function App() {
     },
   });
   function login(user: User) {
+    announceSessionChange();
     client.removeQueries({
       predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
     });

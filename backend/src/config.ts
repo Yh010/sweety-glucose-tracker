@@ -29,6 +29,7 @@ const schema = z.object({
       .optional(),
   ),
   REMINDER_HOUR: z.coerce.number().int().min(0).max(23).default(21),
+  AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   DB_POOL_SIZE: z.coerce.number().int().min(1).max(50).default(10),
 });
 

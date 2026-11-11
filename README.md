@@ -29,7 +29,7 @@ docker compose up -d postgres
 npm run db:local --prefix backend
 ```
 
-For the second option keep that terminal running. Data stays in `backend/.local/postgres`; Ctrl+C stops the server. The bundled native binaries may require package-manager script approval. The launcher enables automatic symlink repair. If using an existing PostgreSQL server, create databases `sweety` and `sweety_test` and update both database URLs.
+For the second option keep that terminal running. New databases explicitly use UTF-8 so names in any language are supported. Data stays in `backend/.local/postgres`; Ctrl+C stops the server. The bundled native binaries may require package-manager script approval. The launcher enables automatic symlink repair. If using an existing PostgreSQL server, create databases `sweety` and `sweety_test` and update both database URLs.
 
 In another terminal:
 
@@ -67,7 +67,7 @@ npm run test:e2e --prefix frontend
 
 API tests use actual PostgreSQL, including simultaneous requests, database constraints, bcrypt, sessions, ownership, CRUD, validation, conflicting edits, pagination, boundaries and rounding. Frontend tests cover reading-form behavior and dates. Browser journeys exercise registration, CRUD, validation, exact report calculations, logout/login, account switching, failed-write recovery, focus preservation and midnight updates on desktop/mobile. See [the end-to-end QA report](docs/E2E-QA.md).
 
-Browser tests use Google Chrome by default and start the two servers if needed. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. CI uses the Chrome already installed on the hosted Ubuntu runner. Browser tests create synthetic accounts: use a disposable database outside local evaluation. Mobile tests emulate a phone viewport; physical-device testing remains future work.
+Browser tests use Google Chrome by default and start dedicated servers on ports 5174/4001. They require TEST_DATABASE_URL ending in `_test`, create a random schema, and drop only that schema during teardown. They never reuse the demo servers or write to the demo database. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. CI uses the Chrome already installed on the hosted Ubuntu runner. Browser tests create synthetic accounts in their own disposable schema. Their isolated API allows 1,000 authentication attempts per window; the normal app keeps its default limit of 30 attempts per IP per 15 minutes, verified by a separate integration test. Mobile tests emulate a phone viewport; physical-device testing remains future work.
 
 With both servers running, `npm run review:ui --prefix frontend` regenerates demo screenshots and automated WCAG checks under `.impeccable/review/`. Submission screenshots are in `docs/screenshots/`.
 
@@ -161,7 +161,7 @@ docker compose --profile extras up -d
 
 If a Redis-compatible service is already installed, use that instead. Set REDIS_URL=redis://127.0.0.1:6379 in backend/.env, apply migrations and restart the API. Redis 6.2+ is required by BullMQ; Compose supplies Redis 7. Use noeviction for queue storage. The Compose Redis volume enables append-only persistence.
 
-**Report caching:** reading creates, edits and deletes bump a patient-specific version in the same PostgreSQL transaction. Cached responses are keyed by patient, version, period and date. Old requests cannot repopulate the current version after a write. Old keys expire after ten minutes to bound storage; this retention timer does not make reports stale. Redis errors fall back to PostgreSQL. A date-leading index supports the worker's across-patient scan. Reading writes should go through the API so version invalidation is applied.
+**Report caching:** reading creates, edits and deletes bump a patient-specific version in the same PostgreSQL transaction. Cached responses are keyed by patient, version, period and date. Old requests cannot repopulate the current version after a write. Old keys expire after ten minutes to bound storage; this retention timer does not make reports stale. Redis errors and malformed cache records fall back to PostgreSQL. A date-leading index supports the worker's across-patient scan. Reading writes should go through the API so version invalidation is applied.
 
 **Reminder logging:** start the optional process in another terminal:
 

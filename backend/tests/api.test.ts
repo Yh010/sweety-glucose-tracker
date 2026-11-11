@@ -102,6 +102,38 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
       await admin.end();
     }
   });
+  test('authentication throttling is enforced without blocking health or profile reads', async () => {
+    const config = loadConfig({
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: databaseUrl,
+      AUTH_RATE_LIMIT: '1',
+    });
+    const limited = createApp(pool, config).listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => limited.once('listening', resolve));
+    const address = limited.address();
+    assert.ok(address && typeof address === 'object');
+    const url = `http://127.0.0.1:${address.port}/api`;
+    try {
+      const options = {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'Sweety', 'Content-Type': 'application/json' },
+        body: '{}',
+      };
+      assert.equal((await fetch(`${url}/auth/login`, options)).status, 400);
+      const blocked = await fetch(`${url}/auth/login`, options);
+      assert.equal(blocked.status, 429);
+      assert.equal((await blocked.json()).error.code, 'RATE_LIMITED');
+      assert.ok(blocked.headers.get('retry-after'));
+      assert.equal((await fetch(`${url}/health`)).status, 200);
+      assert.equal(
+        (await fetch(`${url}/auth/me`, { headers: { Cookie: aliceCookie } })).status,
+        200,
+      );
+    } finally {
+      await new Promise<void>((resolve) => limited.close(() => resolve()));
+    }
+  });
   test('hashes passwords using bcrypt and normalizes emails', async () => {
     const row = await pool.query('SELECT password_hash FROM users WHERE id=$1', [aliceId]);
     assert.notEqual(row.rows[0].password_hash, credentials.password);

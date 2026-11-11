@@ -19,7 +19,7 @@
     "worker:start": "node dist/worker.js",
     "reminders:run": "tsx src/modules/reminders/run-cli.ts",
     "test:extras": "tsx --test tests/extras.integration.ts",
-    "serve:e2e": "tsx src/server.ts"
+    "serve:e2e": "tsx scripts/e2e-server.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

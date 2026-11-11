@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Check } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { slots, type Reading, type ReadingInput, type Slot, type User } from '../../lib/types';
 import { formatDate } from '../../lib/dates';
 import { DatePicker } from '../../components/DatePicker';
@@ -35,6 +35,7 @@ export function DailyPage({
   };
   const save = useMutation({
     onMutate: () => setNotice(''),
+    onError: invalidate,
     mutationFn: (input: ReadingInput) => api.save(input, editing?.id),
     onSuccess: ({ reading }) => {
       setNotice(editing ? 'Reading updated.' : 'Reading saved.');
@@ -50,7 +51,15 @@ export function DailyPage({
   });
   const remove = useMutation({
     onMutate: () => setNotice(''),
-    mutationFn: (reading: Reading) => api.remove(reading.id),
+    onError: invalidate,
+    mutationFn: async (reading: Reading) => {
+      try {
+        await api.remove(reading.id);
+      } catch (error) {
+        // A lost response or another tab may have already removed it.
+        if (!(error instanceof ApiError && error.status === 404)) throw error;
+      }
+    },
     onSuccess: (_data, reading) => {
       if (editing?.id === reading.id) setEditing(null);
       setNotice('Reading deleted.');

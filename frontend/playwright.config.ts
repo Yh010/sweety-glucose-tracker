@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
+  globalTeardown: './e2e-teardown.ts',
   testDir: './e2e',
   fullyParallel: false,
   workers: 1,
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:5174',
     channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
@@ -25,15 +26,16 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm --prefix ../backend run serve:e2e',
-      url: 'http://127.0.0.1:4000/api/health',
-      reuseExistingServer: !process.env.CI,
+      command: 'node node_modules/tsx/dist/cli.mjs scripts/e2e-server.ts',
+      cwd: '../backend',
+      url: 'http://127.0.0.1:4001/api/health',
+      reuseExistingServer: false,
       timeout: 30000,
     },
     {
-      command: 'npm run dev',
-      url: 'http://localhost:5173',
-      reuseExistingServer: !process.env.CI,
+      command: 'node node_modules/vite/bin/vite.js --host localhost --config vite.e2e.config.ts',
+      url: 'http://localhost:5174',
+      reuseExistingServer: false,
       timeout: 30000,
     },
   ],
