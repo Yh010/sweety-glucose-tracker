@@ -14,17 +14,48 @@ export function createApp(pool: Pool, config: Config) {
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     const requestId = randomUUID();
-    res.set({ 'X-Request-ID': requestId, 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store' });
-    if (config.NODE_ENV !== 'test') res.on('finish', () => console.log(JSON.stringify({ event: 'request', requestId, method: req.method, path: req.path, status: res.statusCode })));
+    const path = req.path;
+    res.set({
+      'X-Request-ID': requestId,
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+      'Cache-Control': 'no-store',
+    });
+    if (config.NODE_ENV !== 'test')
+      res.on('finish', () =>
+        console.log(
+          JSON.stringify({
+            event: 'request',
+            requestId,
+            method: req.method,
+            path,
+            status: res.statusCode,
+          }),
+        ),
+      );
     // A custom header prevents cross-site form requests; no CORS is enabled.
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      if (req.get('X-Requested-With') !== 'Sweety' || (req.get('Origin') && req.get('Origin') !== config.APP_ORIGIN)) throw new AppError(403, 'ORIGIN_REJECTED', 'Request origin could not be verified. Reload the page and try again.');
+      if (
+        req.get('X-Requested-With') !== 'Sweety' ||
+        (req.get('Origin') && req.get('Origin') !== config.APP_ORIGIN)
+      )
+        throw new AppError(
+          403,
+          'ORIGIN_REJECTED',
+          'Request origin could not be verified. Reload the page and try again.',
+        );
     }
     next();
   });
   app.use(express.json({ limit: '16kb' }));
-  app.get('/api/health', async (_req, res) => { await pool.query('SELECT 1'); res.json({ status: 'ok' }); });
-  app.get('/api/meta', (_req, res) => res.json({ today: todayInZone(config.APP_TIMEZONE), timezone: config.APP_TIMEZONE }));
+  app.get('/api/health', async (_req, res) => {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok' });
+  });
+  app.get('/api/meta', (_req, res) =>
+    res.json({ today: todayInZone(config.APP_TIMEZONE), timezone: config.APP_TIMEZONE }),
+  );
   app.use('/api/auth', authRoutes(pool, config));
   app.use('/api/readings', requireAuth(pool), readingRoutes(pool, config.APP_TIMEZONE));
   app.use('/api/reports', requireAuth(pool), reportRoutes(pool, config.APP_TIMEZONE));

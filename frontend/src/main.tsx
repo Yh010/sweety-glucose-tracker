@@ -5,5 +5,20 @@ import '@fontsource-variable/manrope';
 import './styles.css';
 import App from './App';
 import { ApiError } from './lib/api';
-const client = new QueryClient({ defaultOptions: { queries: { staleTime: 15000, retry: (attempt, error) => attempt < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500), refetchOnWindowFocus: true } } });
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={client}><App /></QueryClientProvider></React.StrictMode>);
+const client = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15000,
+      retry: (attempt, error) =>
+        attempt < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500),
+      refetchOnWindowFocus: true,
+    },
+  },
+});
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={client}>
+      <App />
+    </QueryClientProvider>
+  </React.StrictMode>,
+);

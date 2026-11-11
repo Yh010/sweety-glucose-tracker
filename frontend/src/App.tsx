@@ -13,16 +13,87 @@ export default function App() {
   const [view, setView] = useState<View>('daily');
   const [expired, setExpired] = useState(false);
   const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, staleTime: Infinity });
-  const meta = useQuery({ queryKey: ['meta'], queryFn: api.meta, staleTime: 30000, refetchInterval: 60000 });
+  const meta = useQuery({
+    queryKey: ['meta'],
+    queryFn: api.meta,
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
   useEffect(() => {
-    function expire() { void client.cancelQueries().then(() => { client.clear(); setExpired(true); client.setQueryData(['me'], null); }); }
+    function expire() {
+      void client.cancelQueries().then(() => {
+        client.removeQueries({
+          predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
+        });
+        setExpired(true);
+        client.setQueryData(['me'], null);
+      });
+    }
     window.addEventListener('session-expired', expire);
     return () => window.removeEventListener('session-expired', expire);
   }, [client]);
-  const logout = useMutation({ mutationFn: api.logout, onSuccess: async () => { await client.cancelQueries(); client.clear(); setExpired(false); setView('daily'); client.setQueryData(['me'], null); } });
-  function login(user: User) { client.clear(); client.setQueryData(['me'], { user }); setExpired(false); setView('daily'); }
-  if (me.isPending) return <div className="app-loading"><Loading label="Opening your journal…" /></div>;
-  if (me.isError && !(me.error instanceof ApiError && me.error.status === 401)) return <div className="app-loading"><ErrorState error={me.error} retry={() => void me.refetch()} /></div>;
+  const logout = useMutation({
+    mutationFn: api.logout,
+    onSuccess: async () => {
+      await client.cancelQueries();
+      client.removeQueries({
+        predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
+      });
+      setExpired(false);
+      setView('daily');
+      client.setQueryData(['me'], null);
+    },
+  });
+  function login(user: User) {
+    client.removeQueries({
+      predicate: (query) => !['me', 'meta'].includes(String(query.queryKey[0])),
+    });
+    client.setQueryData(['me'], { user });
+    setExpired(false);
+    setView('daily');
+  }
+  if (me.isPending)
+    return (
+      <div className="app-loading">
+        <Loading label="Opening your journal…" />
+      </div>
+    );
+  if (me.isError && !(me.error instanceof ApiError && me.error.status === 401))
+    return (
+      <div className="app-loading">
+        <ErrorState error={me.error} retry={() => void me.refetch()} />
+      </div>
+    );
   if (!me.data?.user) return <AuthPage onSuccess={login} expired={expired} />;
-  return <AppShell user={me.data.user} view={view} onView={setView} onLogout={() => logout.mutate()} loggingOut={logout.isPending}>{logout.isError && <ErrorState error={logout.error} />}{meta.isPending ? <Loading label="Checking the date…" /> : meta.isError ? <ErrorState error={meta.error} retry={() => void meta.refetch()} /> : <>{view === 'daily' ? <DailyPage user={me.data.user} today={meta.data.today} onReports={() => setView('reports')} /> : <ReportsPage today={meta.data.today} onLog={() => setView('daily')} />}<p className="timezone-note">Dates follow {meta.data.timezone.replaceAll('_', ' ')} time.</p></>}</AppShell>;
+  return (
+    <AppShell
+      user={me.data.user}
+      view={view}
+      onView={setView}
+      onLogout={() => logout.mutate()}
+      loggingOut={logout.isPending}
+    >
+      {logout.isError && <ErrorState error={logout.error} />}
+      {meta.isPending ? (
+        <Loading label="Checking the date…" />
+      ) : meta.isError ? (
+        <ErrorState error={meta.error} retry={() => void meta.refetch()} />
+      ) : (
+        <>
+          {view === 'daily' ? (
+            <DailyPage
+              user={me.data.user}
+              today={meta.data.today}
+              onReports={() => setView('reports')}
+            />
+          ) : (
+            <ReportsPage today={meta.data.today} onLog={() => setView('daily')} />
+          )}
+          <p className="timezone-note">
+            Dates follow {meta.data.timezone.replaceAll('_', ' ')} time.
+          </p>
+        </>
+      )}
+    </AppShell>
+  );
 }

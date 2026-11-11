@@ -5,7 +5,18 @@ import { mkdir } from 'node:fs/promises';
 // Development only. This starts real PostgreSQL on loopback without installing a system service.
 const databaseDir = resolve('.local/postgres');
 await mkdir(databaseDir, { recursive: true });
-const postgres = new EmbeddedPostgres({ databaseDir, user: 'sweety', password: 'sweety_local', port: 5432, persistent: true, authMethod: 'scram-sha-256', autoRehydrateSymlinks: true, postgresFlags: ['-h', '127.0.0.1'], onLog: () => {}, onError: (message: unknown) => console.error(String(message)) });
+const postgres = new EmbeddedPostgres({
+  databaseDir,
+  user: 'sweety',
+  password: 'sweety_local',
+  port: 5432,
+  persistent: true,
+  authMethod: 'scram-sha-256',
+  autoRehydrateSymlinks: true,
+  postgresFlags: ['-h', '127.0.0.1'],
+  onLog: () => {},
+  onError: (message: unknown) => console.error(String(message)),
+});
 await postgres.initialise();
 await postgres.start();
 const client = postgres.getPgClient();
@@ -17,7 +28,12 @@ for (const database of ['sweety', 'sweety_test']) {
 await client.end();
 console.log('Local PostgreSQL is ready on 127.0.0.1:5432. Press Ctrl+C to stop.');
 let stopping = false;
-async function stop() { if (stopping) return; stopping = true; await postgres.stop(); process.exit(0); }
+async function stop() {
+  if (stopping) return;
+  stopping = true;
+  await postgres.stop();
+  process.exit(0);
+}
 process.on('SIGINT', () => void stop());
 process.on('SIGTERM', () => void stop());
 await new Promise(() => {});
