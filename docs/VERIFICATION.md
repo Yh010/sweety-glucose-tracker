@@ -7,7 +7,7 @@ Checked locally on 11 November 2026 with Node.js 24, PostgreSQL 18 (real embedde
 | Backend strict TypeScript and production build | Passed |
 | Backend unit/integration tests | 25 passed; actual PostgreSQL, no skipped tests |
 | Frontend unit/component tests | 9 passed |
-| Browser journeys | 18 passed: desktop and mobile CRUD/validation/reports/logout/login, network recovery, session expiry, login/registration preservation across visibility changes |
+| Browser journeys | 20 passed: desktop and mobile CRUD/validation/reports/logout/login, network recovery, session expiry, login/registration preservation across visibility changes |
 | Production migration command | Passed, including replay of the applied migration |
 | Demo seed | Validated in isolated schema; today and previous-month data, safe repeat, existing password preserved |
 | Local PostgreSQL restart | Passed; 134 demo readings retained |
@@ -26,4 +26,4 @@ Reproduced the login field reset before the fix: an unauthenticated profile quer
 
 ## Expanded end-to-end audit
 
-See [the full QA report](E2E-QA.md). All 18 desktop/mobile browser tests passed against real PostgreSQL-backed APIs; 25 backend tests and 9 frontend tests also passed. Three reproduced bugs were fixed: deletion retry did not retry, the selected date remained editable during pending writes, and midnight metadata updates moved the selected day during data entry.
+See [the full QA report](E2E-QA.md). The complete 18-scenario audit passed against real PostgreSQL-backed APIs, followed by two passing desktop/mobile dev-server reload checks; 25 backend tests and 9 frontend tests also passed. Three reproduced bugs were fixed: deletion retry did not retry, the selected date remained editable during pending writes, and midnight metadata updates moved the selected day during data entry.
