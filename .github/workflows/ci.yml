@@ -43,7 +43,10 @@ jobs:
       - run: npm exec --prefix frontend -- playwright install --with-deps chromium
       - run: npm run test:e2e --prefix frontend
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: browser-results
-          path: frontend/test-results
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7

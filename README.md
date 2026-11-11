@@ -65,7 +65,7 @@ npm run format:check --prefix frontend
 npm run test:e2e --prefix frontend
 ```
 
-API tests use actual PostgreSQL, including simultaneous requests, database constraints, bcrypt, sessions, ownership, CRUD, validation, conflicting edits, pagination, boundaries and rounding. Frontend tests cover reading-form behavior and dates. Browser journeys exercise registration, CRUD, validation, reports, logout/login and network recovery on desktop/mobile.
+API tests use actual PostgreSQL, including simultaneous requests, database constraints, bcrypt, sessions, ownership, CRUD, validation, conflicting edits, pagination, boundaries and rounding. Frontend tests cover reading-form behavior and dates. Browser journeys exercise registration, CRUD, validation, exact report calculations, logout/login, account switching, failed-write recovery, focus preservation and midnight updates on desktop/mobile. See [the end-to-end QA report](docs/E2E-QA.md).
 
 Browser tests use Google Chrome by default and start the two servers if needed. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. The GitHub workflow does this on Linux. Browser tests create synthetic accounts: use a disposable database outside local evaluation. Mobile tests emulate a phone viewport; physical-device testing remains future work.
 
@@ -124,7 +124,7 @@ All routes start with `/api`. Mutations need JSON and `X-Requested-With: Sweety`
 
 - PostgreSQL follows the explicit requirement despite the assignment's MERN title. No AI feature is required.
 - Registration signs users in. Emails are normalized. Names: max 80 characters; emails: max 254; passwords: min eight characters and max 72 UTF-8 bytes (bcrypt limit).
-- Default timezone: `Asia/Kolkata`, shown in the UI. Dates start at 1900 and cannot be future dates. Per-patient timezones are future work.
+- Default timezone: `Asia/Kolkata`, shown in the UI. Dates start at 1900 and cannot be future dates. Midnight updates preserve the selected day and draft; date navigation is locked during pending writes. Per-patient timezones are future work.
 - All reading fields are editable. Conflicting edits roll back. Creating on a full day reports the daily limit first; other duplicates report the slot conflict. Updates exclude their own row from the count.
 - For 15 October, month-to-date means 1-15 October; monthly means 1-30 September. Empty reports return zero count and null aggregates. Averages display one decimal.
 - Charts show daily averages. Missing days have no point; lines connect recorded dates. Daily reports list every reading and slot.

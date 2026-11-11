@@ -4,23 +4,26 @@ export function DatePicker({
   date,
   today,
   onChange,
+  disabled = false,
 }: {
   date: string;
   today: string;
   onChange: (date: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="date-picker">
       <button
         className="icon-button"
         aria-label="Previous day"
-        disabled={date <= '1900-01-01'}
+        disabled={disabled || date <= '1900-01-01'}
         onClick={() => onChange(shiftDate(date, -1))}
       >
         <ChevronLeft size={18} />
       </button>
       <input
         aria-label="Selected date"
+        disabled={disabled}
         type="date"
         value={date}
         min="1900-01-01"
@@ -32,7 +35,7 @@ export function DatePicker({
       <button
         className="icon-button"
         aria-label="Next day"
-        disabled={date >= today}
+        disabled={disabled || date >= today}
         onClick={() => onChange(shiftDate(date, 1))}
       >
         <ChevronRight size={18} />

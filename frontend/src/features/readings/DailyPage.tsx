@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Check } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -25,15 +25,10 @@ export function DailyPage({
   const [slot, setSlot] = useState<Slot>('fasting');
   const [notice, setNotice] = useState('');
   const [formVersion, setFormVersion] = useState(0);
-  const previousToday = useRef(today);
   const report = useQuery({
     queryKey: ['reports', date, 'daily'],
     queryFn: () => api.report(date, 'daily'),
   });
-  useEffect(() => {
-    if (date === previousToday.current) setDate(today);
-    previousToday.current = today;
-  }, [today, date]);
   const invalidate = () => {
     void client.invalidateQueries({ queryKey: ['reports'] });
     void client.invalidateQueries({ queryKey: ['readings'] });
@@ -99,7 +94,12 @@ export function DailyPage({
                 })}
           </p>
         </div>
-        <DatePicker date={date} today={today} onChange={changeDate} />
+        <DatePicker
+          date={date}
+          today={today}
+          onChange={changeDate}
+          disabled={save.isPending || remove.isPending}
+        />
       </header>
       <div className="notice-region" aria-live="polite">
         {notice && (
@@ -156,7 +156,14 @@ export function DailyPage({
               </section>
             </>
           )}
-          {remove.isError && <ErrorState error={remove.error} retry={() => remove.reset()} />}
+          {remove.isError && (
+            <ErrorState
+              error={remove.error}
+              retry={() => {
+                if (remove.variables) remove.mutate(remove.variables);
+              }}
+            />
+          )}
           <div className="journal-note">
             <span className="journal-line" />
             <p>
