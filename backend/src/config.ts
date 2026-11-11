@@ -17,6 +17,18 @@ const schema = z.object({
         return false;
       }
     }, 'Use a valid IANA timezone'),
+  REDIS_URL: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .url()
+      .refine(
+        (v) => ['redis:', 'rediss:'].includes(new URL(v).protocol),
+        'Use redis:// or rediss://',
+      )
+      .optional(),
+  ),
+  REMINDER_HOUR: z.coerce.number().int().min(0).max(23).default(21),
   DB_POOL_SIZE: z.coerce.number().int().min(1).max(50).default(10),
 });
 

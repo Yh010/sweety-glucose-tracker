@@ -2,7 +2,8 @@ name: Checks
 on: [push, pull_request]
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18-alpine
@@ -14,12 +15,18 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U sweety -d sweety_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
     env:
+      TEST_REDIS_URL: redis://localhost:6379
       DATABASE_URL: postgresql://sweety:sweety_ci@localhost:5432/sweety_test
       TEST_DATABASE_URL: postgresql://sweety:sweety_ci@localhost:5432/sweety_test
       APP_ORIGIN: http://localhost:5173
       APP_TIMEZONE: Asia/Kolkata
-      PLAYWRIGHT_CHANNEL: chromium
+      PLAYWRIGHT_CHANNEL: chrome
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,9 +45,11 @@ jobs:
         run: npm test --prefix backend
         env:
           DATABASE_URL: postgresql://sweety:sweety_ci@localhost:5432/unused
+      - run: npm run test:extras --prefix backend
       - run: npm test --prefix frontend
       - run: npm run build --prefix frontend
-      - run: npm exec --prefix frontend -- playwright install --with-deps chromium
+      # Chrome is included in the hosted Ubuntu image; avoid a second apt/browser install.
+      - run: google-chrome --version
       - run: npm run test:e2e --prefix frontend
       - uses: actions/upload-artifact@v4
         if: always()

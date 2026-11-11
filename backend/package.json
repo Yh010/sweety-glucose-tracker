@@ -14,14 +14,20 @@
     "db:migrate": "tsx src/db/migrate-cli.ts",
     "db:seed": "tsx src/db/seed-cli.ts",
     "test": "tsx --test tests/*.test.ts",
-    "db:local": "tsx scripts/local-db.ts"
+    "db:local": "tsx scripts/local-db.ts",
+    "worker": "tsx src/worker.ts",
+    "worker:start": "node dist/worker.js",
+    "reminders:run": "tsx src/modules/reminders/run-cli.ts",
+    "test:extras": "tsx --test tests/extras.integration.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.7.4",
     "cookie": "^1.0.2",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
+    "ioredis": "^6.0.0",
     "pg": "^8.16.3",
     "zod": "^4.1.13"
   },

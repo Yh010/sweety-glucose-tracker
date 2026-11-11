@@ -7,9 +7,10 @@ import { todayInZone } from './lib/dates.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { requireAuth } from './modules/auth/session.js';
 import { readingRoutes } from './modules/readings/routes.js';
+import type { ReportCache } from './infrastructure/report-cache.js';
 import { reportRoutes } from './modules/reports/routes.js';
 
-export function createApp(pool: Pool, config: Config) {
+export function createApp(pool: Pool, config: Config, cache?: ReportCache) {
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -58,7 +59,7 @@ export function createApp(pool: Pool, config: Config) {
   );
   app.use('/api/auth', authRoutes(pool, config));
   app.use('/api/readings', requireAuth(pool), readingRoutes(pool, config.APP_TIMEZONE));
-  app.use('/api/reports', requireAuth(pool), reportRoutes(pool, config.APP_TIMEZONE));
+  app.use('/api/reports', requireAuth(pool), reportRoutes(pool, config.APP_TIMEZONE, cache));
   app.use((_req, _res, next) => next(new AppError(404, 'NOT_FOUND', 'Endpoint not found.')));
   app.use(errorHandler);
   return app;

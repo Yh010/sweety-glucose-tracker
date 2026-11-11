@@ -36,6 +36,7 @@ export async function saveReading(
           'INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5) RETURNING id,date,slot,value',
           [randomUUID(), userId, input.date, input.slot, input.value],
         );
+    await client.query('UPDATE users SET report_version=report_version+1 WHERE id=$1', [userId]);
     await client.query('COMMIT');
     return result.rows[0]!;
   } catch (error) {
