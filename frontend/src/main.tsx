@@ -8,10 +8,11 @@ import { ApiError } from './lib/api';
 const client = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15000,
+      staleTime: Infinity,
       retry: (attempt, error) =>
         attempt < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500),
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   },
 });

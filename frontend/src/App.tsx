@@ -12,10 +12,24 @@ export default function App() {
   const client = useQueryClient();
   const [view, setView] = useState<View>('daily');
   const [expired, setExpired] = useState(false);
-  const me = useQuery({ queryKey: ['me'], queryFn: api.me, retry: false, staleTime: Infinity });
+  const me = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      try {
+        return await api.me();
+      } catch (error) {
+        // Being logged out is a normal state, not a failed query to retry on focus.
+        if (error instanceof ApiError && error.status === 401) return { user: null };
+        throw error;
+      }
+    },
+    retry: false,
+    staleTime: Infinity,
+  });
   const meta = useQuery({
     queryKey: ['meta'],
     queryFn: api.meta,
+    enabled: Boolean(me.data?.user),
     staleTime: 30000,
     refetchInterval: 60000,
   });
@@ -58,7 +72,7 @@ export default function App() {
         <Loading label="Opening your journal…" />
       </div>
     );
-  if (me.isError && !(me.error instanceof ApiError && me.error.status === 401))
+  if (me.isError)
     return (
       <div className="app-loading">
         <ErrorState error={me.error} retry={() => void me.refetch()} />
@@ -74,9 +88,9 @@ export default function App() {
       loggingOut={logout.isPending}
     >
       {logout.isError && <ErrorState error={logout.error} />}
-      {meta.isPending ? (
+      {!meta.data && meta.isPending ? (
         <Loading label="Checking the date…" />
-      ) : meta.isError ? (
+      ) : !meta.data && meta.isError ? (
         <ErrorState error={meta.error} retry={() => void meta.refetch()} />
       ) : (
         <>

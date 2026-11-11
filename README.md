@@ -104,7 +104,7 @@ frontend/
 - Reports use indexed user/date filters and SQL aggregates. Month responses contain at most 124 readings. The reading list is paginated, with limit capped at 100.
 - bcrypt cost 12; opaque random tokens in HttpOnly/SameSite cookies; only token digests in PostgreSQL. Sessions expire after seven days; logout revokes them. Production cookies require HTTPS.
 - Mutations require a custom header and an allowed origin when supplied; CORS is disabled. Parameterized SQL and session-derived user IDs prevent choosing another patient's data. Auth routes are throttled. Logs exclude bodies, cookies and query values.
-- TanStack Query owns server data and invalidates reports after writes. Patient data is removed from the cache on logout/expiry. Form errors preserve entered values.
+- TanStack Query owns server data and invalidates reports after writes. Window focus and reconnect do not trigger fetches. Logged-out users have no metadata polling. Patient data is removed from the cache on logout/expiry. Form errors preserve entered values.
 - Date-only strings stay dates through the driver and API. The server's configured timezone defines today. Report endpoints include both boundary dates.
 
 ## API
