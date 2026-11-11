@@ -14,3 +14,6 @@ Each user sees only their own data. Four named meal slots. Integer glucose value
 
 ## Design assumptions
 Design choices are delegated by the user. Prioritize a clear daily workflow, keyboard access, readable numbers, and responsive layouts. Use calm copy; do not infer clinical categories or provide treatment advice. A configurable application timezone determines today's date consistently.
+
+## Implemented enhancements
+Patient-owned CSV downloads for the selected report; next-slot suggestions and complete-day guidance; a Today shortcut. Optional Redis caching is invalidated on reading changes. An optional BullMQ worker logs incomplete days without sending messages. Doctor accounts are not implemented.

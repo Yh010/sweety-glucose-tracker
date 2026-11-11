@@ -1461,3 +1461,48 @@ tbody tr:last-child td {
     scroll-behavior: auto !important;
   }
 }
+
+/* Report export and daily-entry affordances inherit the journal's existing palette. */
+.report-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.export-button {
+  background: white;
+  color: var(--green);
+  border: 1px solid var(--line);
+}
+.today-button {
+  padding: 6px 10px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--mint);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 650;
+}
+.complete-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 22px;
+  color: var(--green);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.complete-note svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+@media (max-width: 760px) {
+  .export-button {
+    min-height: 42px;
+  }
+  .today-button {
+    padding-inline: 7px;
+  }
+}

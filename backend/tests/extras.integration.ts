@@ -19,7 +19,7 @@ import {
 } from '../src/modules/reminders/queue.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
-const redisUrl = process.env.TEST_REDIS_URL ?? process.env.REDIS_URL;
+const redisUrl = process.env.TEST_REDIS_URL || process.env.REDIS_URL;
 if (!databaseUrl || !new URL(databaseUrl).pathname.endsWith('_test'))
   throw new Error('Use a disposable TEST_DATABASE_URL ending in _test.');
 if (!redisUrl)

@@ -9,7 +9,11 @@ export class ApiError extends Error {
     super(message);
   }
 }
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  read: (response: Response) => Promise<T> = (response) => response.json() as Promise<T>,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -42,7 +46,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw error;
   }
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  return read(response);
 }
 export const api = {
   meta: () => request<Meta>('/meta'),
@@ -60,6 +64,10 @@ export const api = {
       body: JSON.stringify(input),
     }),
   remove: (id: string) => request<void>(`/readings/${id}`, { method: 'DELETE' }),
+  exportReport: (date: string, period: Period) =>
+    request<Blob>(`/reports/export?date=${date}&period=${period}`, {}, (response) =>
+      response.blob(),
+    ),
   report: (date: string, period: Period) =>
     request<Report>(`/reports?date=${date}&period=${period}`),
 };

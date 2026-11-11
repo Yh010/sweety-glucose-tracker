@@ -21,9 +21,8 @@ test('register, validate, create, edit, report, delete and log in again', async 
   await save(page, 'after_lunch', '130');
   await save(page, 'after_dinner', '140');
   await expect(page.getByText('4 of 4 recorded')).toBeVisible();
-  await page.getByLabel('Glucose value').fill('150');
-  await page.getByRole('button', { name: 'Save reading', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('only 4 readings');
+  await expect(page.getByRole('button', { name: 'Day complete', exact: true })).toBeDisabled();
+  await expect(page.getByText(/All four readings are recorded/)).toBeVisible();
   await page.getByRole('button', { name: 'Reports', exact: true }).click();
   await page.getByRole('button', { name: 'Daily', exact: true }).click();
   await expect(page.getByRole('table')).toContainText('111');

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T12:11:45.314158+00:00",
+  "generatedAt": "2026-11-11T14:39:13.325629+00:00",
   "title": "Design System: Sweety",
   "extensions": {
     "colorMeta": {
@@ -386,9 +386,32 @@
       "name": "Reading form surface",
       "kind": "card",
       "refersTo": "reading-form",
-      "description": "Pale-green surface uses darker local helpers.",
+      "description": "Pale-green surface uses darker local helpers. Suggest the next empty meal slot without replacing typed values or manual slot choices.",
       "html": "<section class=\"ds-form\"><h2>Add a reading</h2><p>A quick entry. A little more clarity.</p><div class=\"ds-form-note\">One reading per time slot.<br>Up to four entries each day.</div></section>",
       "css": ".ds-form{font-family:var(--font-sans,'Manrope Variable','Segoe UI',sans-serif);--muted:#53644f;padding:25px 24px 22px;background:#eaf0e5;border-radius:12px;color:var(--ink,#213c34)}.ds-form h2{font-size:18px;font-weight:650;margin:0}.ds-form p{font-size:12px;color:var(--muted);margin:8px 0}.ds-form-note{border-top:1px solid #cad8c4;margin-top:24px;padding-top:18px;color:#50644d;font-size:12px;line-height:1.9}"
+    },
+    {
+      "name": "CSV download",
+      "kind": "button",
+      "refersTo": "button-export",
+      "description": "Exports the selected report. Disabled for fetching or empty reports; Preparing CSV... locks export, period and date controls. Failures reuse the inline error block with Retry.",
+      "html": "<button class=\"ds-export\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3\"/></svg>Download CSV</button>",
+      "css": ".ds-export{font-family:var(--font-sans,'Manrope Variable','Segoe UI',sans-serif);display:inline-flex;align-items:center;gap:10px;min-height:46px;padding:12px 19px;border:1px solid var(--line,#dce5dd);border-radius:8px;background:white;color:var(--green,#164f46);font-size:13px;font-weight:650;cursor:pointer;transition:background-color 150ms ease,transform 140ms var(--ease-out,cubic-bezier(.23,1,.32,1))}.ds-export:active:not(:disabled){transform:scale(.98)}.ds-export:focus-visible{outline:3px solid #438778;outline-offset:4px}.ds-export:disabled{opacity:.48;cursor:not-allowed}@media(max-width:760px){.ds-export{min-height:42px}}@media(prefers-reduced-motion:reduce){.ds-export{transition-duration:.01ms}}"
+    },
+    {
+      "name": "Today shortcut",
+      "kind": "button",
+      "refersTo": "button-today",
+      "description": "Compact shortcut inside the date control; shown only when a past date is selected. Returns to application today and shares the date control disabled state.",
+      "html": "<button class=\"ds-today\">Today</button>",
+      "css": ".ds-today{font-family:var(--font-sans,'Manrope Variable','Segoe UI',sans-serif);padding:6px 10px;margin-right:4px;border:0;border-radius:5px;background:var(--mint,#e9f0e5);color:var(--green,#164f46);font-size:12px;font-weight:650;cursor:pointer}.ds-today:focus-visible{outline:3px solid #438778;outline-offset:4px}.ds-today:disabled{opacity:.48;cursor:not-allowed}@media(max-width:760px){.ds-today{padding-inline:7px}}"
+    },
+    {
+      "name": "Complete-day guidance",
+      "kind": "custom",
+      "description": "Inline status in the reading form after four entries. Slot, value and Day complete submission are disabled; date entry and editing stay available.",
+      "html": "<p class=\"ds-complete\" role=\"status\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m20 6-11 11-5-5\"/></svg><span>All four readings are recorded. Edit an entry in your log or choose another date below.</span></p>",
+      "css": ".ds-complete{font-family:var(--font-sans,'Manrope Variable','Segoe UI',sans-serif);display:flex;align-items:flex-start;gap:8px;margin:22px 0 0;color:var(--green,#164f46);font-size:12px;line-height:1.8}.ds-complete svg{flex-shrink:0;margin-top:3px}"
     }
   ],
   "narrative": {
@@ -422,6 +445,8 @@
       "**Do** preserve four named slots, visible units and tabular glucose values.",
       "**Do** reuse the same entry form for Record and Edit, including focus transfer.",
       "**Do** keep chart bounds tied to the report's exact date window.",
+      "**Do** preserve typed drafts when suggesting the next empty slot.",
+      "**Do** keep date entry available when a day is complete, and freeze report range controls only while preparing its CSV.",
       "**Do** preserve keyboard focus, text labels and reduced-motion behavior."
     ],
     "donts": [

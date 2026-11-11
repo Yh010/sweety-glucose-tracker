@@ -13,6 +13,11 @@ export function DatePicker({
 }) {
   return (
     <div className="date-picker">
+      {date !== today && (
+        <button className="today-button" disabled={disabled} onClick={() => onChange(today)}>
+          Today
+        </button>
+      )}
       <button
         className="icon-button"
         aria-label="Previous day"

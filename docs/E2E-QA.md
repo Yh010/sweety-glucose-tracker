@@ -6,10 +6,11 @@ Tested on 11 November 2026 using Google Chrome, real Node/Express servers and Po
 
 | Check | Result |
 | --- | --- |
-| Desktop browser scenarios | 10 passed |
-| Mobile browser scenarios | 10 passed |
+| Desktop browser scenarios | 11 passed |
+| Mobile browser scenarios | 11 passed |
 | Backend unit/integration tests | 25 passed |
-| Frontend unit/component tests | 9 passed |
+| Redis/BullMQ/CSV integration tests | 5 passed |
+| Frontend unit/component tests | 11 passed |
 | Backend and frontend production builds | Passed |
 | Formatting | Passed |
 | Automated WCAG checks inside account/report flows | Zero violations |
@@ -53,3 +54,9 @@ The Playwright HTML report is generated under frontend/playwright-report (not co
 ## Limits
 
 Mobile coverage is Chromium phone emulation, not a physical iPhone or Safari. Firefox and WebKit have not been tested. Automated accessibility checks do not replace a complete manual screen-reader review. Docker Compose has not been executed locally; PostgreSQL-backed CI runs separately. No public app deployment was tested. There are no outstanding failures in the tested scope; these checks do not prove the absence of every possible defect.
+
+## Bonus-feature regression run
+
+The complete 22-scenario browser suite passed after adding CSV export, completion guidance, Today navigation and next-slot suggestions. The real download includes exactly the selected range, loading controls prevent changing the range mid-download, and empty reports disable export. Completing a day leaves its date field usable and disables the fifth entry. Suggested-slot changes do not clear a draft; revisiting the app chooses the next unfilled slot.
+
+Five integration tests use PostgreSQL plus Redis/BullMQ; run npm run test:extras --prefix backend with TEST_REDIS_URL or REDIS_URL set. The optional worker is log-only and sends no notifications. The test API uses a non-watch startup command to avoid an extra Windows development watcher during cleanup.

@@ -54,3 +54,7 @@ The frontend formats the average as `110.0`. Empty reports return null aggregate
 `GET /api/readings?from=2026-10-01&to=2026-10-15&page=1&limit=20`
 
 Returns `{"readings":[...],"pagination":{"page":1,"limit":20,"total":42}}`. Both optional date boundaries are inclusive. Order: newest date first, then meal order. Page is 1-based; limit is 1-100. No results means empty readings and total zero.
+
+## Download a report
+
+GET /api/reports/export?date=2026-10-15&period=monthly uses the same authentication, validation and date ranges as the JSON report. It returns text/csv with an attachment filename containing the period and date range. Columns: Date, Time slot, Glucose (mg/dl). UTF-8 BOM and CRLF row endings support spreadsheet applications. No names or emails are exported. An empty range returns only the header; the UI disables empty downloads.

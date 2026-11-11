@@ -68,3 +68,20 @@ it('disables changes while saving and offers cancellation when editing', async (
   await userEvent.click(screen.getByText('Cancel editing', { exact: true }));
   expect(defaults.onCancel).toHaveBeenCalledOnce();
 });
+
+it('lets a complete day switch dates while preventing a fifth entry', async () => {
+  render(<ReadingForm {...defaults} dayComplete />);
+  expect(screen.getByRole('button', { name: 'Day complete' })).toBeDisabled();
+  expect(screen.getByLabelText('Date')).toBeEnabled();
+  expect(screen.getByLabelText('Glucose value')).toBeDisabled();
+  await userEvent.clear(screen.getByLabelText('Date'));
+  await userEvent.type(screen.getByLabelText('Date'), '2026-11-10');
+  expect(screen.getByLabelText('Glucose value')).toBeEnabled();
+});
+it('does not clear a draft when the suggested next slot changes', async () => {
+  const { rerender } = render(<ReadingForm {...defaults} />);
+  await userEvent.type(screen.getByLabelText('Glucose value'), '110');
+  rerender(<ReadingForm {...defaults} selectedSlot="after_lunch" />);
+  expect(screen.getByLabelText('Glucose value')).toHaveValue(110);
+  expect(screen.getByLabelText('Time slot')).toHaveValue('fasting');
+});

@@ -67,7 +67,7 @@ npm run test:e2e --prefix frontend
 
 API tests use actual PostgreSQL, including simultaneous requests, database constraints, bcrypt, sessions, ownership, CRUD, validation, conflicting edits, pagination, boundaries and rounding. Frontend tests cover reading-form behavior and dates. Browser journeys exercise registration, CRUD, validation, exact report calculations, logout/login, account switching, failed-write recovery, focus preservation and midnight updates on desktop/mobile. See [the end-to-end QA report](docs/E2E-QA.md).
 
-Browser tests use Google Chrome by default and start the two servers if needed. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. The GitHub workflow does this on Linux. Browser tests create synthetic accounts: use a disposable database outside local evaluation. Mobile tests emulate a phone viewport; physical-device testing remains future work.
+Browser tests use Google Chrome by default and start the two servers if needed. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. CI uses the Chrome already installed on the hosted Ubuntu runner. Browser tests create synthetic accounts: use a disposable database outside local evaluation. Mobile tests emulate a phone viewport; physical-device testing remains future work.
 
 With both servers running, `npm run review:ui --prefix frontend` regenerates demo screenshots and automated WCAG checks under `.impeccable/review/`. Submission screenshots are in `docs/screenshots/`.
 
@@ -84,7 +84,9 @@ backend/
     lib/               Date calculations and errors
     modules/auth/      Registration and database-backed sessions
     modules/readings/  Validation, routes, transactional writes
-    modules/reports/   Date-bounded SQL aggregation
+    modules/reports/   Date-bounded SQL aggregation and CSV export
+    modules/reminders/ Optional BullMQ jobs
+    infrastructure/    Optional Redis report cache
   tests/               Unit and PostgreSQL integration tests
 frontend/
   src/
@@ -128,12 +130,12 @@ All routes start with `/api`. Mutations need JSON and `X-Requested-With: Sweety`
 - All reading fields are editable. Conflicting edits roll back. Creating on a full day reports the daily limit first; other duplicates report the slot conflict. Updates exclude their own row from the count.
 - For 15 October, month-to-date means 1-15 October; monthly means 1-30 September. Empty reports return zero count and null aggregates. Averages display one decimal.
 - Charts show daily averages. Missing days have no point; lines connect recorded dates. Daily reports list every reading and slot.
-- Bonuses: pagination, monthly chart, database Docker Compose, reading-form tests. Redis, BullMQ and doctor accounts remain future work.
+- Bonuses: pagination, monthly chart, database Docker Compose, reading-form tests, Redis report caching and BullMQ daily reminder logs. Doctor accounts remain optional future work.
 - This journal records readings; it does not classify risk or recommend treatment.
 
 ### With more time
 
-Password recovery, email verification, patient timezones, export, more device/browser coverage. Before real patient use: applicable privacy requirements, monitoring, backup/restore, retention and an audit trail. At higher traffic: a shared rate-limit store and scheduled session cleanup. Add report caching after measuring query cost. Current auth throttling is per process; configure Express proxy trust deliberately when deploying behind a trusted proxy.
+Password recovery, email verification, patient timezones, export, more device/browser coverage. Before real patient use: applicable privacy requirements, monitoring, backup/restore, retention and an audit trail. At higher traffic: a shared rate-limit store and scheduled session cleanup. Benchmark the optional report cache and tune it from measured query costs. Current auth throttling is per process; configure Express proxy trust deliberately when deploying behind a trusted proxy.
 
 ## Production build
 
@@ -142,3 +144,45 @@ Build both projects with the commands above. From `backend/`, run `node dist/db/
 ## Submission
 
 Use the public repository link and `docs/screenshots/` when replying to the hiring email. No real credentials, personal readings or assessment email are included. Publishing the repository and sending that email are separate steps.
+
+## Report downloads and easier daily entry
+
+Use **Download CSV** in Reports to save the selected report's individual readings. The export has date, meal slot and glucose in mg/dl, uses the displayed date range, and includes only the signed-in patient's data. Empty reports disable the download. CSV is useful for bringing a record to an appointment; the app does not send it to anyone.
+
+The form suggests the next unfilled slot. Completing all four entries shows a clear status and prevents an unnecessary fifth submission; the date field stays usable so a patient can record another day. Historical dates have a **Today** shortcut. Refreshed suggestions never replace a typed draft.
+
+## Optional Redis cache and reminder worker
+
+The app still runs entirely on PostgreSQL when REDIS_URL is omitted. To enable both extras with Docker:
+
+```sh
+docker compose --profile extras up -d
+```
+
+If a Redis-compatible service is already installed, use that instead. Set REDIS_URL=redis://127.0.0.1:6379 in backend/.env, apply migrations and restart the API. Redis 6.2+ is required by BullMQ; Compose supplies Redis 7. Use noeviction for queue storage. The Compose Redis volume enables append-only persistence.
+
+**Report caching:** reading creates, edits and deletes bump a patient-specific version in the same PostgreSQL transaction. Cached responses are keyed by patient, version, period and date. Old requests cannot repopulate the current version after a write. Old keys expire after ten minutes to bound storage; this retention timer does not make reports stale. Redis errors fall back to PostgreSQL. A date-leading index supports the worker's across-patient scan. Reading writes should go through the API so version invalidation is applied.
+
+**Reminder logging:** start the optional process in another terminal:
+
+```sh
+npm run worker --prefix backend
+```
+
+It installs one BullMQ scheduler at REMINDER_HOUR (default 21:00) in APP_TIMEZONE. Patients with fewer than four entries get one reminder_events row per date. Database uniqueness makes retries safe. Logs contain only the date and aggregate count, without names, emails, patient IDs or reading values. This is the assignment's background reminder-log bonus: it does not send notifications or email. Jobs retry three times with exponential backoff; completed and failed job retention is bounded.
+
+To enqueue an immediate local demonstration while the worker is running:
+
+```sh
+npm run reminders:run --prefix backend
+```
+
+Production workers use npm run worker:start after the backend build. Multiple worker instances share a stable scheduler ID, and the database prevents duplicate reminder rows. Use separate Redis databases/instances per deployment environment.
+
+To test these extras against real PostgreSQL and Redis, set TEST_REDIS_URL (or REDIS_URL), then run:
+
+```sh
+npm run test:extras --prefix backend
+```
+
+This suite uses a random database schema and Redis key prefix and removes only its own data. It verifies caching, patient isolation, create/edit/delete invalidation, late old cache writes, Redis disconnection fallback, CSV bytes, reminder idempotency, a real BullMQ job and timezone-aware scheduling. CI runs it against PostgreSQL 18 and Redis 7.

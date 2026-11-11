@@ -76,6 +76,17 @@ components:
   button-text:
     textColor: "{colors.forest}"
     padding: "4px 0"
+  button-export:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.forest}"
+    rounded: "{rounded.control}"
+    padding: "12px 19px"
+  button-today:
+    backgroundColor: "{colors.mint}"
+    textColor: "{colors.forest}"
+    rounded: "{rounded.badge}"
+    padding: "6px 10px"
+    typography: "{typography.label}"
   input:
     backgroundColor: "{colors.white}"
     textColor: "{colors.ink}"
@@ -167,6 +178,8 @@ The desktop shell is a 224px sticky full-height rail plus a flexible workspace. 
 - Between 761px and 960px, the rail is 158px. Daily content becomes one column and the form fields use a two-column grid. The decorative journal note and form note are hidden.
 - At 760px and narrower, navigation becomes a forest-green top region. Content has 20px gutters; the topbar is 42px high. The daily log, summary and full-width form stack in that order with a 30px layout gap. Four summary columns remain, with units below numbers. Report period controls fill the width; the report range stacks.
 
+Report controls wrap with a 16px gap: period selection and CSV download share a desktop row, while download sits below the full-width period selector on mobile. The Today shortcut stays inside the date control on both sizes.
+
 The body supports a minimum width of 320px. Report tables scroll horizontally when needed. Authentication uses two equal desktop columns, with a 360px-wide form; mobile removes the story panel and shows a brand above the form.
 
 ## Elevation & Depth
@@ -185,6 +198,8 @@ Panels have gently rounded 12px corners; buttons and date-picker containers use 
 
 Primary actions use forest fill, white text, 46px minimum height and compact horizontal padding. A fine-pointer hover lightens the fill; press scales to 0.98. Text actions use forest with a hover underline. Icon actions have transparent backgrounds and a soft-green hover fill; destructive icon hover uses a pale-red surface and danger text. Disabled buttons use 0.48 opacity and a not-allowed cursor.
 
+CSV download uses the same button shape and press behavior, with white fill, forest text, a fine line border and a 16px download icon. Its minimum height becomes 42px on mobile. Today is a compact mint-filled button inside the date control, with a 5px radius and 12px semibold label; its horizontal padding reduces to 7px on mobile. Both retain the shared keyboard focus and disabled treatment.
+
 All keyboard focus uses a 3px green outline with 4px offset. Background transitions take 150ms; button press transforms take 140ms with the project ease-out curve. Reduced motion collapses transitions and animations to 0.01ms.
 
 ### Inputs / Fields
@@ -199,9 +214,17 @@ Desktop active navigation uses lime fill on the forest rail. Inactive items are 
 
 Keep all four named slots visible: fasting, after breakfast, after lunch and after dinner. Empty slots expose “Record”; recorded slots show a value, “Recorded” with a check, and edit/delete actions. A count badge shows progress without hiding empty slots. “Record” selects that slot and focuses the glucose input in the same form; edit also uses that form. Deletion asks for confirmation inline. The shared “Values in mg/dl” label stays visible when compact rows omit repeated units.
 
+The form suggests the first empty slot in meal order and advances after a save. Refreshed suggestions must preserve a typed value and a manually chosen slot. Once all four slots on the selected day are filled, retain the form and show a forest-colored check with an inline status note: “All four readings are recorded. Edit an entry in your log or choose another date below.” The note uses 12px type, 1.8 line height and a 22px top margin. Disable the slot, glucose field and “Day complete” submit button while keeping the date available; editing an existing entry remains possible.
+
+### Date control
+
+Keep native date entry between previous/next arrows. Show Today only when viewing a past date; it returns to the application's current date. The next arrow remains disabled at today. During CSV preparation, disable the report date control together with period selection so the visible range remains tied to the download.
+
 ### Reports
 
 Report periods use three segmented buttons with `aria-pressed`; selection uses a white inset surface and small shadow. The range label and chart share the exact report start and end. Chart points represent daily averages, with no point for missing days; the caption explains that lines connect recorded days. Use forest strokes, small white-edged points, dashed neutral gridlines and a textual SVG description. Daily reports use a table. Empty reports present a journal icon, plain explanation and action back to the daily log.
+
+“Download CSV” exports the selected report. Disable it while report data is fetching, when the range has no readings, and during export. Preparation changes the label to the literal “Preparing CSV...” while the existing report stays visible. Export errors reuse the inline error block with Retry; changing date or period clears the export error. Keep the download in the same control family rather than adding another accent color.
 
 ### Feedback
 
@@ -215,6 +238,8 @@ Successful saves and deletes announce compact inline messages through a polite l
 - **Do** preserve four named slots, visible units and tabular glucose values.
 - **Do** reuse the same entry form for Record and Edit, including focus transfer.
 - **Do** keep chart bounds tied to the report's exact date window.
+- **Do** preserve typed drafts when suggesting the next empty slot.
+- **Do** keep date entry available when a day is complete, and freeze report range controls only while preparing its CSV.
 - **Do** preserve keyboard focus, text labels and reduced-motion behavior.
 
 ### Don't:

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { BarChart3, NotebookPen } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { BarChart3, Download, NotebookPen } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Period } from '../../lib/types';
 import { formatDate } from '../../lib/dates';
+import { downloadFile } from '../../lib/download';
 import { DatePicker } from '../../components/DatePicker';
 import { ErrorState, Loading } from '../../components/Feedback';
 import { Summary } from './Summary';
@@ -17,6 +18,16 @@ export function ReportsPage({ today, onLog }: { today: string; onLog: () => void
     queryKey: ['reports', date, period],
     queryFn: () => api.report(date, period),
   });
+  const exportReport = useMutation({
+    mutationFn: () => api.exportReport(date, period),
+    onSuccess: (blob) => {
+      if (!report.data) return;
+      downloadFile(
+        blob,
+        `sweety-${period}-${report.data.range.start}-to-${report.data.range.end}.csv`,
+      );
+    },
+  });
   return (
     <>
       <header className="page-heading">
@@ -24,7 +35,15 @@ export function ReportsPage({ today, onLog }: { today: string; onLog: () => void
           <h1>A clearer picture.</h1>
           <p className="text-muted mt-3">Your readings, brought together.</p>
         </div>
-        <DatePicker date={date} today={today} onChange={setDate} />
+        <DatePicker
+          date={date}
+          today={today}
+          onChange={(selected) => {
+            setDate(selected);
+            exportReport.reset();
+          }}
+          disabled={exportReport.isPending}
+        />
       </header>
       <div className="report-controls">
         <div className="segmented-control" role="group" aria-label="Report period">
@@ -35,12 +54,31 @@ export function ReportsPage({ today, onLog }: { today: string; onLog: () => void
               ['monthly', 'Previous month'],
             ] as const
           ).map(([value, label]) => (
-            <button key={value} aria-pressed={period === value} onClick={() => setPeriod(value)}>
+            <button
+              key={value}
+              aria-pressed={period === value}
+              disabled={exportReport.isPending}
+              onClick={() => {
+                setPeriod(value);
+                exportReport.reset();
+              }}
+            >
               {label}
             </button>
           ))}
         </div>
+        <button
+          className="button export-button"
+          disabled={exportReport.isPending || report.isFetching || !report.data?.summary.count}
+          onClick={() => exportReport.mutate()}
+        >
+          <Download size={16} aria-hidden="true" />
+          {exportReport.isPending ? 'Preparing CSV...' : 'Download CSV'}
+        </button>
       </div>
+      {exportReport.isError && (
+        <ErrorState error={exportReport.error} retry={() => exportReport.mutate()} />
+      )}
       {report.isPending ? (
         <Loading label="Preparing your report…" />
       ) : report.isError ? (

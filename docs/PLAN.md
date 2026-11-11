@@ -16,3 +16,11 @@ Backend feature modules own routes, validation and database access. Shared infra
 
 ## Assumptions
 Application timezone defaults to Asia/Kolkata and is configurable. Date-only values use YYYY-MM-DD throughout. A monthly report is the calendar month before the selected date. No readings means count 0 and null aggregates. Name max 80 characters, email max 254, passwords 8 characters minimum / 72 UTF-8 bytes maximum (bcrypt limit). A duplicate is a conflict; if all four slots are filled, a create reports the daily limit first. Public hosting and email submission are separate external actions.
+
+## Bonus milestone
+- [x] Optional Redis report cache with transactionally versioned invalidation.
+- [x] BullMQ incomplete-day logging, timezone schedule, retries and database deduplication.
+- [x] Patient-scoped CSV export with browser download tests.
+- [x] Next unfilled slot, complete-day recovery and Today shortcut.
+- [x] Real Redis/worker integration tests and desktop/mobile regressions.
+- [ ] Optional doctor accounts and assigned-patient reports (outside this milestone).

@@ -9,6 +9,7 @@ type Props = {
   selectedSlot: Slot;
   editing: Reading | null;
   pending: boolean;
+  dayComplete?: boolean;
   error: unknown;
   onSave: (input: ReadingInput) => void;
   onCancel: () => void;
@@ -19,22 +20,30 @@ export function ReadingForm({
   selectedSlot,
   editing,
   pending,
+  dayComplete = false,
   error,
   onSave,
   onCancel,
 }: Props) {
   const id = useId();
   const valueRef = useRef<HTMLInputElement>(null);
+  // Suggestions initialize the form; refreshed data must never replace a draft.
+  const initialSlot = useRef(selectedSlot);
+  const slotTouched = useRef(false);
   const [date, setDate] = useState(editing?.date ?? defaultDate);
   const [slot, setSlot] = useState<Slot>(editing?.slot ?? selectedSlot);
   const [value, setValue] = useState(editing ? String(editing.value) : '');
   const [validation, setValidation] = useState('');
+  const isComplete = dayComplete && date === defaultDate && !editing;
   useEffect(() => {
     setDate(editing?.date ?? defaultDate);
-    setSlot(editing?.slot ?? selectedSlot);
+    setSlot(editing?.slot ?? initialSlot.current);
     setValue(editing ? String(editing.value) : '');
     setValidation('');
-  }, [editing, defaultDate, selectedSlot]);
+  }, [editing, defaultDate]);
+  useEffect(() => {
+    if (!editing && !slotTouched.current && !valueRef.current?.value) setSlot(selectedSlot);
+  }, [editing, selectedSlot]);
   useEffect(() => {
     if (editing) valueRef.current?.focus({ preventScroll: true });
   }, [editing]);
@@ -85,6 +94,14 @@ export function ReadingForm({
       <p className="text-muted text-sm mt-2">
         {editing ? 'Update the details of this entry.' : 'A quick entry. A little more clarity.'}
       </p>
+      {isComplete && (
+        <p className="complete-note" role="status">
+          <Check size={17} aria-hidden="true" />
+          <span>
+            All four readings are recorded. Edit an entry in your log or choose another date below.
+          </span>
+        </p>
+      )}
       <form className="reading-form" noValidate onSubmit={submit}>
         <fieldset disabled={pending} className="form-fields">
           <label className="field" htmlFor={`${id}-date`}>
@@ -103,8 +120,12 @@ export function ReadingForm({
             Time slot
             <select
               id={`${id}-slot`}
+              disabled={isComplete}
               value={slot}
-              onChange={(e) => setSlot(e.target.value as Slot)}
+              onChange={(e) => {
+                slotTouched.current = true;
+                setSlot(e.target.value as Slot);
+              }}
             >
               {slots.map((s) => (
                 <option key={s} value={s}>
@@ -117,6 +138,7 @@ export function ReadingForm({
             <label htmlFor={`${id}-value`}>Glucose value</label>
             <span className="glucose-input">
               <input
+                disabled={isComplete}
                 ref={valueRef}
                 id={`${id}-value`}
                 type="number"
@@ -141,8 +163,17 @@ export function ReadingForm({
               {message}
             </p>
           )}
-          <button className="button button-primary w-full justify-center" disabled={pending}>
-            {pending ? 'Saving…' : editing ? 'Save changes' : 'Save reading'}
+          <button
+            className="button button-primary w-full justify-center"
+            disabled={pending || isComplete}
+          >
+            {isComplete
+              ? 'Day complete'
+              : pending
+                ? 'Saving…'
+                : editing
+                  ? 'Save changes'
+                  : 'Save reading'}
             {editing ? (
               <Check size={17} aria-hidden="true" />
             ) : (

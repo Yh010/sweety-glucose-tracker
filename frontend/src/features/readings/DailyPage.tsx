@@ -22,7 +22,7 @@ export function DailyPage({
   const client = useQueryClient();
   const [date, setDate] = useState(today);
   const [editing, setEditing] = useState<Reading | null>(null);
-  const [slot, setSlot] = useState<Slot>('fasting');
+  const [slot, setSlot] = useState<Slot | null>(null);
   const [notice, setNotice] = useState('');
   const [formVersion, setFormVersion] = useState(0);
   const report = useQuery({
@@ -43,7 +43,7 @@ export function DailyPage({
       const next = slots.find(
         (s) => s !== reading.slot && !report.data?.readings.some((r) => r.slot === s),
       );
-      setSlot(next ?? 'fasting');
+      setSlot(reading.date === date ? (next ?? null) : null);
       setFormVersion((v) => v + 1);
       invalidate();
     },
@@ -70,6 +70,7 @@ export function DailyPage({
   function changeDate(value: string) {
     setDate(value);
     setEditing(null);
+    setSlot(null);
     save.reset();
     remove.reset();
     setNotice('');
@@ -173,20 +174,31 @@ export function DailyPage({
             </p>
           </div>
         </div>
-        <ReadingForm
-          key={formVersion}
-          today={today}
-          defaultDate={date}
-          selectedSlot={slot}
-          editing={editing}
-          pending={save.isPending}
-          error={save.error}
-          onSave={(input) => save.mutate(input)}
-          onCancel={() => {
-            setEditing(null);
-            save.reset();
-          }}
-        />
+        {report.data && (
+          <ReadingForm
+            key={`${date}:${formVersion}`}
+            today={today}
+            defaultDate={date}
+            selectedSlot={
+              slot ??
+              slots.find(
+                (candidate) => !report.data.readings.some((reading) => reading.slot === candidate),
+              ) ??
+              'fasting'
+            }
+            dayComplete={report.data.summary.count === 4}
+            editing={editing}
+            pending={save.isPending}
+            error={save.error}
+            onSave={(input) => save.mutate(input)}
+            onCancel={() => {
+              setEditing(null);
+              setSlot(null);
+              setFormVersion((value) => value + 1);
+              save.reset();
+            }}
+          />
+        )}
       </div>
       <p className="page-footnote">Your readings are private. Only you can access your journal.</p>
     </>
