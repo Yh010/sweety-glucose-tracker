@@ -1,0 +1,190 @@
+import { after, before, beforeEach, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
+import type { Pool } from 'pg';
+import bcrypt from 'bcryptjs';
+import { loadConfig } from '../src/config.js';
+import { createPool } from '../src/db/pool.js';
+import { migrate } from '../src/db/migrate.js';
+import { createApp } from '../src/app.js';
+import { todayInZone } from '../src/lib/dates.js';
+import { slots } from '../src/modules/readings/schema.js';
+
+const databaseUrl = process.env.TEST_DATABASE_URL;
+if (!databaseUrl || databaseUrl === process.env.DATABASE_URL || !new URL(databaseUrl).pathname.endsWith('_test')) {
+  throw new Error('Set TEST_DATABASE_URL to a separate disposable database whose name ends with _test. See .env.example.');
+}
+const schema = `test_${randomUUID().replaceAll('-', '')}`;
+let admin: Pool, pool: Pool, server: Server, base: string;
+let aliceCookie: string, bobCookie: string, aliceId: string;
+const credentials = { email: 'alice@example.com', password: 'securePassword123!' };
+async function call(path: string, method = 'GET', body?: unknown, cookie?: string, headers: Record<string, string> = {}) {
+  const response = await fetch(`${base}/api${path}`, { method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'Sweety', Origin: 'http://localhost:5173', ...(cookie ? { Cookie: cookie } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const data = response.status === 204 ? null : await response.json();
+  return { status: response.status, data, cookie: response.headers.getSetCookie().find((c) => c.startsWith('sweety_session='))?.split(';')[0], headers: response.headers };
+}
+const reading = (overrides: Record<string, unknown> = {}) => ({ date: '2026-10-15', slot: 'fasting', value: 100, ...overrides });
+const add = (overrides: Record<string, unknown> = {}, cookie = aliceCookie) => call('/readings', 'POST', reading(overrides), cookie);
+
+describe('PostgreSQL-backed API', { concurrency: false }, () => {
+  before(async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test', DATABASE_URL: databaseUrl });
+    admin = createPool(config);
+    await admin.query(`CREATE SCHEMA ${schema}`);
+    const scoped = new URL(databaseUrl!); scoped.searchParams.set('options', `-c search_path=${schema}`);
+    pool = createPool({ ...config, DATABASE_URL: scoped.toString() });
+    await migrate(pool); await migrate(pool); // Migration replay must be safe.
+    server = createApp(pool, config).listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const address = server.address(); assert.ok(address && typeof address === 'object');
+    base = `http://127.0.0.1:${address.port}`;
+    const alice = await call('/auth/register', 'POST', { ...credentials, name: 'Alice' });
+    assert.equal(alice.status, 201); aliceCookie = alice.cookie!; aliceId = alice.data.user.id;
+    const bob = await call('/auth/register', 'POST', { name: 'Bob', email: 'bob@example.com', password: 'anotherPassword123!' });
+    assert.equal(bob.status, 201); bobCookie = bob.cookie!;
+  });
+  beforeEach(async () => { await pool.query('DELETE FROM readings'); });
+  after(async () => {
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (pool) await pool.end();
+    if (admin) { await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`); await admin.end(); }
+  });
+  test('hashes passwords using bcrypt and normalizes emails', async () => {
+    const row = await pool.query('SELECT password_hash FROM users WHERE id=$1', [aliceId]);
+    assert.notEqual(row.rows[0].password_hash, credentials.password);
+    assert.equal(await bcrypt.compare(credentials.password, row.rows[0].password_hash), true);
+    const result = await call('/auth/login', 'POST', { email: ' ALICE@EXAMPLE.COM ', password: credentials.password });
+    assert.equal(result.status, 200); assert.equal(result.data.user.id, aliceId);
+    const cookieHeader = result.headers.get('set-cookie')!;
+    assert.match(cookieHeader, /HttpOnly/); assert.match(cookieHeader, /SameSite=Lax/); assert.match(cookieHeader, /Path=\/api/);
+    assert.equal('password_hash' in result.data.user, false);
+  });
+  test('rejects duplicate email registration regardless of case', async () => {
+    const result = await call('/auth/register', 'POST', { ...credentials, email: 'ALICE@example.com', name: 'Someone else' });
+    assert.equal(result.status, 409); assert.equal(result.data.error.code, 'EMAIL_EXISTS');
+  });
+  test('login errors do not distinguish missing accounts from bad passwords', async () => {
+    const wrong = await call('/auth/login', 'POST', { ...credentials, password: 'wrong' });
+    const missing = await call('/auth/login', 'POST', { ...credentials, email: 'missing@example.com' });
+    assert.equal(wrong.status, 401); assert.deepEqual(wrong.data, missing.data);
+  });
+  test('rejects passwords longer than bcrypt’s UTF-8 byte limit', async () => {
+    const result = await call('/auth/register', 'POST', { name: 'Long', email: 'long@example.com', password: 'é'.repeat(40) });
+    assert.equal(result.status, 400);
+  });
+  test('requires authentication and rejects cross-origin mutations', async () => {
+    assert.equal((await call('/readings')).status, 401);
+    assert.equal((await call('/reports?date=2026-10-15&period=daily')).status, 401);
+    assert.equal((await call('/readings', 'POST', reading(), aliceCookie, { Origin: 'https://unrelated.example' })).status, 403);
+    assert.equal((await call('/readings', 'POST', reading(), aliceCookie, { 'X-Requested-With': '' })).status, 403);
+  });
+  test('metadata supplies the date and configured timezone', async () => {
+    const result = await call('/meta');
+    assert.equal(result.data.today, todayInZone('Asia/Kolkata'));
+    assert.equal(result.data.timezone, 'Asia/Kolkata');
+  });
+  test('creates, lists, updates and deletes a reading', async () => {
+    const created = await add(); assert.equal(created.status, 201);
+    const id = created.data.reading.id;
+    const list = await call('/readings?from=2026-10-15&to=2026-10-15', 'GET', undefined, aliceCookie);
+    assert.equal(list.data.readings.length, 1); assert.equal(list.data.readings[0].date, '2026-10-15');
+    const updated = await call(`/readings/${id}`, 'PUT', reading({ date: '2026-10-14', slot: 'after_lunch', value: 120 }), aliceCookie);
+    assert.equal(updated.status, 200); assert.equal(updated.data.reading.value, 120);
+    assert.equal((await call(`/readings/${id}`, 'DELETE', undefined, aliceCookie)).status, 204);
+    assert.equal((await call(`/readings/${id}`, 'DELETE', undefined, aliceCookie)).status, 404);
+  });
+  test('rejects empty, fractional, nonnumeric and out-of-range values', async () => {
+    for (const value of [null, '', '100', 39, 601, 100.5, true]) assert.equal((await add({ value })).status, 400);
+    const { value: _value, ...noValue } = reading();
+    assert.equal((await call('/readings', 'POST', noValue, aliceCookie)).data.error.message, 'Please enter a glucose value.');
+    assert.equal((await add({ value: 40 })).status, 201);
+    assert.equal((await add({ value: 600, slot: 'after_lunch' })).status, 201);
+  });
+  test('rejects invalid slots, invalid calendar dates, future dates and ownership fields', async () => {
+    for (const input of [{ slot: 'snack' }, { date: '2026-02-30' }, { date: '2999-01-01' }, { user_id: aliceId }]) assert.equal((await add(input)).status, 400);
+    assert.equal((await add({ date: '2999-01-01' })).data.error.code, 'FUTURE_DATE');
+  });
+  test('allows each slot once and reports a clear daily limit', async () => {
+    await add();
+    const duplicate = await add(); assert.equal(duplicate.status, 409); assert.equal(duplicate.data.error.code, 'DUPLICATE_SLOT');
+    for (const slot of slots.slice(1)) assert.equal((await add({ slot })).status, 201);
+    assert.equal((await add()).data.error.code, 'DAILY_LIMIT');
+    assert.equal((await add({ date: '2026-10-16' })).status, 201);
+  });
+  test('simultaneous duplicate requests create exactly one reading', async () => {
+    const results = await Promise.all(Array.from({ length: 6 }, () => add()));
+    assert.equal(results.filter((r) => r.status === 201).length, 1);
+    assert.equal(results.filter((r) => r.status === 409).length, 5);
+  });
+  test('simultaneous slot submissions cannot exceed four readings', async () => {
+    const results = await Promise.all([...slots, ...slots].map((slot) => add({ slot })));
+    assert.equal(results.filter((r) => r.status === 201).length, 4);
+    const total = await pool.query('SELECT count(*)::int AS count FROM readings WHERE user_id=$1', [aliceId]);
+    assert.equal(total.rows[0].count, 4);
+  });
+  test('editing the same slot succeeds while conflicting edits roll back', async () => {
+    const first = await add(); const second = await add({ slot: 'after_lunch' });
+    assert.equal((await call(`/readings/${first.data.reading.id}`, 'PUT', reading({ value: 110 }), aliceCookie)).status, 200);
+    const conflict = await call(`/readings/${first.data.reading.id}`, 'PUT', reading({ slot: 'after_lunch' }), aliceCookie);
+    assert.equal(conflict.status, 409);
+    const row = await pool.query('SELECT value,slot FROM readings WHERE id=$1', [first.data.reading.id]);
+    assert.deepEqual(row.rows[0], { value: 110, slot: 'fasting' });
+    assert.ok(second.data.reading.id);
+  });
+  test('an edit cannot move a reading into an already full day', async () => {
+    for (const slot of slots) await add({ slot });
+    const other = await add({ date: '2026-10-14' });
+    const result = await call(`/readings/${other.data.reading.id}`, 'PUT', reading(), aliceCookie);
+    assert.equal(result.data.error.code, 'DAILY_LIMIT');
+  });
+  test('another user cannot see, update or delete a reading, or include it in reports', async () => {
+    const first = await add(); const id = first.data.reading.id;
+    assert.equal((await call('/readings', 'GET', undefined, bobCookie)).data.pagination.total, 0);
+    assert.equal((await call(`/readings/${id}`, 'PUT', reading({ value: 500 }), bobCookie)).status, 404);
+    assert.equal((await call(`/readings/${id}`, 'DELETE', undefined, bobCookie)).status, 404);
+    assert.equal((await call('/reports?date=2026-10-15&period=daily', 'GET', undefined, bobCookie)).data.summary.count, 0);
+    assert.equal((await add({}, bobCookie)).status, 201);
+  });
+  test('database constraints independently reject invalid values and duplicate slots', async () => {
+    await add();
+    await assert.rejects(pool.query('INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5)', [randomUUID(), aliceId, '2026-10-15', 'fasting', 101]), { code: '23505' });
+    await assert.rejects(pool.query('INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5)', [randomUUID(), aliceId, '2026-10-15', 'snack', 100]), { code: '23514' });
+    await assert.rejects(pool.query('INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5)', [randomUUID(), aliceId, '2026-10-15', 'after_lunch', 700]), { code: '23514' });
+  });
+  test('reports use inclusive boundaries and round averages to one decimal', async () => {
+    await add({ date: '2026-09-01', value: 90 }); await add({ date: '2026-09-30', value: 130 });
+    await add({ date: '2026-08-31', value: 600 }); await add({ date: '2026-10-01', value: 100 });
+    await add({ value: 101 }); await add({ slot: 'after_lunch', value: 102 }); await add({ slot: 'after_dinner', value: 104 });
+    await add({ date: '2026-10-16', value: 500 });
+    const daily = (await call('/reports?date=2026-10-15&period=daily', 'GET', undefined, aliceCookie)).data;
+    assert.deepEqual(daily.summary, { count: 3, highest: 104, lowest: 101, average: 102.3 });
+    assert.deepEqual(daily.readings.map((r: { slot: string }) => r.slot), ['fasting', 'after_lunch', 'after_dinner']);
+    const mtd = (await call('/reports?date=2026-10-15&period=mtd', 'GET', undefined, aliceCookie)).data;
+    assert.deepEqual(mtd.summary, { count: 4, highest: 104, lowest: 100, average: 101.8 });
+    const monthly = (await call('/reports?date=2026-10-15&period=monthly', 'GET', undefined, aliceCookie)).data;
+    assert.deepEqual(monthly.range, { start: '2026-09-01', end: '2026-09-30' });
+    assert.deepEqual(monthly.summary, { count: 2, highest: 130, lowest: 90, average: 110 });
+  });
+  test('empty reports return count zero and null aggregates', async () => {
+    const result = await call('/reports?date=2026-10-15&period=daily', 'GET', undefined, aliceCookie);
+    assert.deepEqual(result.data.summary, { count: 0, highest: null, lowest: null, average: null });
+    assert.deepEqual(result.data.readings, []);
+  });
+  test('pagination is bounded, ordered and validated', async () => {
+    for (const slot of slots) await add({ slot });
+    const result = await call('/readings?page=2&limit=2', 'GET', undefined, aliceCookie);
+    assert.deepEqual(result.data.pagination, { page: 2, limit: 2, total: 4 });
+    assert.deepEqual(result.data.readings.map((r: { slot: string }) => r.slot), ['after_lunch', 'after_dinner']);
+    for (const query of ['limit=101', 'page=0', 'limit=bad', 'from=2026-10-16&to=2026-10-15']) assert.equal((await call(`/readings?${query}`, 'GET', undefined, aliceCookie)).status, 400);
+  });
+  test('logout revokes the server session and expired sessions fail', async () => {
+    const login = await call('/auth/login', 'POST', credentials);
+    assert.equal((await call('/auth/me', 'GET', undefined, login.cookie)).status, 200);
+    assert.equal((await call('/auth/logout', 'POST', undefined, login.cookie)).status, 204);
+    assert.equal((await call('/auth/me', 'GET', undefined, login.cookie)).status, 401);
+    const another = await call('/auth/login', 'POST', credentials);
+    await pool.query("UPDATE sessions SET expires_at=now()-interval '1 hour' WHERE user_id=$1", [aliceId]);
+    assert.equal((await call('/auth/me', 'GET', undefined, another.cookie)).status, 401);
+  });
+});

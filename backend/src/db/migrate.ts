@@ -8,11 +8,7 @@ export async function migrate(pool: Pool): Promise<void> {
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(27110401)');
     await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
-    const directory = new URL('../../migrations/', import.meta.url);
-    // Compiled files live one level shallower than src/db.
-    const sourceDirectory = new URL('../../../migrations/', import.meta.url);
-    let folder: URL;
-    try { await readdir(sourceDirectory); folder = sourceDirectory; } catch { folder = directory; }
+    const folder = new URL('../../migrations/', import.meta.url);
     for (const file of (await readdir(folder)).filter((f) => f.endsWith('.sql')).sort()) {
       const sql = await readFile(new URL(file, folder), 'utf8');
       const checksum = createHash('sha256').update(sql).digest('hex');
