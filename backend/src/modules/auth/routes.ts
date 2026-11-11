@@ -1,0 +1,50 @@
+import { randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import type { Pool } from 'pg';
+import { z } from 'zod';
+import type { Config } from '../../config.js';
+import { AppError } from '../../lib/errors.js';
+import { issueSession, requireAuth, revokeSession, type User } from './session.js';
+
+const email = z.string().trim().toLowerCase().email('Enter a valid email address.').max(254);
+const password = z.string().min(8, 'Use at least 8 characters.').refine((v) => Buffer.byteLength(v, 'utf8') <= 72, 'Password must be at most 72 UTF-8 bytes.');
+const registration = z.object({ name: z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.'), email, password }).strict();
+const login = z.object({ email, password: z.string().min(1).max(256) }).strict();
+const dummyHash = bcrypt.hashSync('not-a-real-user-password', 12);
+
+export function authRoutes(pool: Pool, config: Config): Router {
+  const router = Router();
+  const limiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: { code: 'RATE_LIMITED', message: 'Too many attempts. Try again in 15 minutes.' } } });
+  router.post('/register', limiter, async (req, res) => {
+    const input = registration.parse(req.body);
+    const passwordHash = await bcrypt.hash(input.password, 12);
+    let user: User;
+    try {
+      const result = await pool.query<User>('INSERT INTO users(id, name, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email', [randomUUID(), input.name, input.email, passwordHash]);
+      user = result.rows[0]!;
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') throw new AppError(409, 'EMAIL_EXISTS', 'An account with this email already exists. Try logging in.');
+      throw error;
+    }
+    await issueSession(pool, user.id, res, config);
+    res.status(201).json({ user });
+  });
+  router.post('/login', limiter, async (req, res) => {
+    const input = login.parse(req.body);
+    const result = await pool.query<User & { password_hash: string }>('SELECT id, name, email, password_hash FROM users WHERE email = $1', [input.email]);
+    const row = result.rows[0];
+    const valid = await bcrypt.compare(input.password, row?.password_hash ?? dummyHash);
+    if (!row || !valid) throw new AppError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
+    await revokeSession(pool, req.headers.cookie, res, config);
+    await issueSession(pool, row.id, res, config);
+    res.json({ user: { id: row.id, name: row.name, email: row.email } });
+  });
+  router.get('/me', requireAuth(pool), (req, res) => res.json({ user: req.user }));
+  router.post('/logout', async (req, res) => {
+    await revokeSession(pool, req.headers.cookie, res, config);
+    res.status(204).end();
+  });
+  return router;
+}
