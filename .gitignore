@@ -9,3 +9,5 @@ playwright-report/
 .local/
 *.log
 *.tsbuildinfo
+
+.impeccable/review/

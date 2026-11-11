@@ -1,0 +1,18 @@
+[
+  {
+    "state": "login",
+    "violations": []
+  },
+  {
+    "state": "daily-desktop",
+    "violations": []
+  },
+  {
+    "state": "reports-mobile",
+    "violations": []
+  },
+  {
+    "state": "daily-mobile",
+    "violations": []
+  }
+]

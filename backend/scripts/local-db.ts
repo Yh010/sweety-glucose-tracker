@@ -1,6 +1,7 @@
 import EmbeddedPostgres from 'embedded-postgres';
 import { resolve } from 'node:path';
 import { mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 // Development only. This starts real PostgreSQL on loopback without installing a system service.
 const databaseDir = resolve('.local/postgres');
@@ -17,7 +18,7 @@ const postgres = new EmbeddedPostgres({
   onLog: () => {},
   onError: (message: unknown) => console.error(String(message)),
 });
-await postgres.initialise();
+if (!existsSync(resolve(databaseDir, 'PG_VERSION'))) await postgres.initialise();
 await postgres.start();
 const client = postgres.getPgClient();
 await client.connect();

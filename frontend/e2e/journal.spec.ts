@@ -80,15 +80,18 @@ test('failed requests offer recovery and a long name fits the page', async ({ pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
- test('an expired session returns to login without retaining the patient view', async ({ page, context }) => {
-   const email = await register(page);
-   await save(page, 'fasting', '100');
-   await context.clearCookies();
-   await page.getByRole('button', {name:'Previous day'}).click();
-   await expect(page.getByText('Your session ended. Log in again to continue.')).toBeVisible();
-   await expect(page.getByRole('heading', {name:'Your daily log'})).toHaveCount(0);
-   await page.getByLabel('Email address').fill(email);
-   await page.getByLabel('Password', {exact:true}).fill('BrowserTest123!');
-   await page.getByRole('button', {name:'Log in',exact:true}).click();
-   await expect(page.getByText('1 of 4 recorded')).toBeVisible();
- });
+test('an expired session returns to login without retaining the patient view', async ({
+  page,
+  context,
+}) => {
+  const email = await register(page);
+  await save(page, 'fasting', '100');
+  await context.clearCookies();
+  await page.getByRole('button', { name: 'Previous day' }).click();
+  await expect(page.getByText('Your session ended. Log in again to continue.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your daily log' })).toHaveCount(0);
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('BrowserTest123!');
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await expect(page.getByText('1 of 4 recorded')).toBeVisible();
+});

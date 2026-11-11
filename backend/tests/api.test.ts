@@ -363,15 +363,23 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
   test('seed data covers today and the previous month and can be rerun safely', async () => {
     await seedDemo(pool, 'Asia/Kolkata', 'seed@example.com', 'SeedPassword123!');
     const today = todayInZone('Asia/Kolkata');
-    const rows = await pool.query('SELECT r.date, count(*)::int AS count FROM readings r JOIN users u ON u.id=r.user_id WHERE u.email=$1 GROUP BY r.date', ['seed@example.com']);
+    const rows = await pool.query(
+      'SELECT r.date, count(*)::int AS count FROM readings r JOIN users u ON u.id=r.user_id WHERE u.email=$1 GROUP BY r.date',
+      ['seed@example.com'],
+    );
     assert.equal(rows.rows.find((row) => row.date === today)?.count, 2);
     assert.ok(rows.rows.some((row) => row.date.slice(0, 7) < today.slice(0, 7)));
     assert.ok(rows.rows.every((row) => row.count <= 4 && row.date <= today));
     const count = rows.rows.reduce((sum, row) => sum + row.count, 0);
     await seedDemo(pool, 'Asia/Kolkata', 'seed@example.com', 'ChangedPassword123!');
-    const seeded = await pool.query('SELECT password_hash FROM users WHERE email=$1', ['seed@example.com']);
+    const seeded = await pool.query('SELECT password_hash FROM users WHERE email=$1', [
+      'seed@example.com',
+    ]);
     assert.equal(await bcrypt.compare('SeedPassword123!', seeded.rows[0].password_hash), true);
-    assert.equal((await pool.query('SELECT count(*)::int AS count FROM readings')).rows[0].count, count);
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS count FROM readings')).rows[0].count,
+      count,
+    );
   });
   test('logout revokes the server session and expired sessions fail', async () => {
     const login = await call('/auth/login', 'POST', credentials);
