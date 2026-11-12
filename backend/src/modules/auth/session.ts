@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { parse, serialize } from 'cookie';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { RequestHandler, Response } from 'express';
 import type { Config } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
@@ -19,18 +19,16 @@ const lifetime = 7 * 24 * 60 * 60;
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 const tokenFrom = (header?: string) => parse(header ?? '')[cookieName];
 
-export async function issueSession(
-  pool: Pool,
-  userId: string,
-  res: Response,
-  config: Config,
-): Promise<void> {
+export async function createSession(db: PoolClient, userId: string): Promise<string> {
   const token = randomBytes(32).toString('hex');
-  await pool.query('DELETE FROM sessions WHERE expires_at < now()');
-  await pool.query(
+  await db.query(
     "INSERT INTO sessions(token_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '7 days')",
     [hash(token), userId],
   );
+  return token;
+}
+
+export function setSessionCookie(res: Response, token: string, config: Config): void {
   res.setHeader(
     'Set-Cookie',
     serialize(cookieName, token, {
@@ -43,14 +41,21 @@ export async function issueSession(
   );
 }
 
+export async function deleteSession(
+  db: Pool | PoolClient,
+  cookie: string | undefined,
+): Promise<void> {
+  const token = tokenFrom(cookie);
+  if (token) await db.query('DELETE FROM sessions WHERE token_hash = $1', [hash(token)]);
+}
+
 export async function revokeSession(
   pool: Pool,
   cookie: string | undefined,
   res: Response,
   config: Config,
 ): Promise<void> {
-  const token = tokenFrom(cookie);
-  if (token) await pool.query('DELETE FROM sessions WHERE token_hash = $1', [hash(token)]);
+  await deleteSession(pool, cookie);
   res.setHeader(
     'Set-Cookie',
     serialize(cookieName, '', {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { todayInZone } from '../../lib/dates.js';
 import { AppError } from '../../lib/errors.js';
 import { listSchema, readingSchema, type Reading } from './schema.js';
-import { saveReading } from './repository.js';
+import { saveReading, deleteReading } from './repository.js';
 
 export function readingRoutes(pool: Pool, timezone: string): Router {
   const router = Router();
@@ -41,11 +41,7 @@ export function readingRoutes(pool: Pool, timezone: string): Router {
   });
   router.delete('/:id', async (req, res) => {
     const id = z.uuid('Invalid reading ID.').parse(req.params.id);
-    const result = await pool.query(
-      'WITH deleted AS (DELETE FROM readings WHERE id=$1 AND user_id=$2 RETURNING user_id) UPDATE users SET report_version=report_version+1 WHERE id IN (SELECT user_id FROM deleted) RETURNING id',
-      [id, req.user!.id],
-    );
-    if (!result.rowCount) throw new AppError(404, 'NOT_FOUND', 'Reading not found.');
+    await deleteReading(pool, req.user!.id, id);
     res.status(204).end();
   });
   return router;

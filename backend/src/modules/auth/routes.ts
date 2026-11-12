@@ -6,7 +6,15 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { Config } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
-import { issueSession, requireAuth, revokeSession, type User } from './session.js';
+import {
+  createSession,
+  deleteSession,
+  setSessionCookie,
+  requireAuth,
+  revokeSession,
+  type User,
+} from './session.js';
+import { transaction } from '../../db/transaction.js';
 
 const email = z.string().trim().toLowerCase().email('Enter a valid email address.').max(254);
 const password = z
@@ -37,15 +45,23 @@ export function authRoutes(pool: Pool, config: Config): Router {
   router.post('/register', limiter, async (req, res) => {
     const input = registration.parse(req.body);
     const passwordHash = await bcrypt.hash(input.password, 12);
-    let user: User;
     try {
-      const result = await pool.query<User>(
-        'INSERT INTO users(id, name, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email',
-        [randomUUID(), input.name, input.email, passwordHash],
-      );
-      user = result.rows[0]!;
+      const { user, token } = await transaction(pool, async (client) => {
+        const result = await client.query<User>(
+          'INSERT INTO users(id, name, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email',
+          [randomUUID(), input.name, input.email, passwordHash],
+        );
+        const user = result.rows[0]!;
+        const token = await createSession(client, user.id);
+        return { user, token };
+      });
+      setSessionCookie(res, token, config);
+      res.status(201).json({ user });
     } catch (error) {
-      if ((error as { code?: string }).code === '23505')
+      if (
+        (error as { code?: string; constraint?: string }).code === '23505' &&
+        (error as { constraint?: string }).constraint === 'users_email_key'
+      )
         throw new AppError(
           409,
           'EMAIL_EXISTS',
@@ -53,8 +69,6 @@ export function authRoutes(pool: Pool, config: Config): Router {
         );
       throw error;
     }
-    await issueSession(pool, user.id, res, config);
-    res.status(201).json({ user });
   });
   router.post('/login', limiter, async (req, res) => {
     const input = login.parse(req.body);
@@ -66,8 +80,11 @@ export function authRoutes(pool: Pool, config: Config): Router {
     const valid = await bcrypt.compare(input.password, row?.password_hash ?? dummyHash);
     if (!row || !valid)
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
-    await revokeSession(pool, req.headers.cookie, res, config);
-    await issueSession(pool, row.id, res, config);
+    const token = await transaction(pool, async (client) => {
+      await deleteSession(client, req.headers.cookie);
+      return createSession(client, row.id);
+    });
+    setSessionCookie(res, token, config);
     res.json({ user: { id: row.id, name: row.name, email: row.email } });
   });
   router.get('/me', requireAuth(pool), (req, res) => res.json({ user: req.user }));

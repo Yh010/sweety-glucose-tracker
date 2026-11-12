@@ -10,6 +10,7 @@ import { migrate } from '../src/db/migrate.js';
 import { createApp } from '../src/app.js';
 import { todayInZone } from '../src/lib/dates.js';
 import { seedDemo } from '../src/db/seed.js';
+import { transaction } from '../src/db/transaction.js';
 import { slots } from '../src/modules/readings/schema.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -101,6 +102,130 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
       await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
       await admin.end();
     }
+  });
+  test('registration rolls back the account when session creation fails, then retries cleanly', async () => {
+    await pool.query(`CREATE FUNCTION reject_session() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic session failure'; END $$;
+      CREATE TRIGGER reject_session BEFORE INSERT ON sessions FOR EACH ROW EXECUTE FUNCTION reject_session()`);
+    const input = {
+      name: 'Atomic registration',
+      email: 'atomic@example.com',
+      password: 'SyntheticAtomic123!',
+    };
+    try {
+      const failed = await call('/auth/register', 'POST', input);
+      assert.equal(failed.status, 500);
+      assert.equal(failed.headers.getSetCookie().length, 0);
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS count FROM users WHERE email=$1', [input.email]))
+          .rows[0].count,
+        0,
+      );
+    } finally {
+      await pool.query('DROP TRIGGER reject_session ON sessions; DROP FUNCTION reject_session()');
+    }
+    const retried = await call('/auth/register', 'POST', input);
+    assert.equal(retried.status, 201);
+    assert.equal((await call('/auth/me', 'GET', undefined, retried.cookie)).status, 200);
+  });
+  test('failed session replacement keeps the previous login valid and sends no cookie', async () => {
+    await pool.query(`CREATE FUNCTION reject_session() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic session failure'; END $$;
+      CREATE TRIGGER reject_session BEFORE INSERT ON sessions FOR EACH ROW EXECUTE FUNCTION reject_session()`);
+    try {
+      const failed = await call('/auth/login', 'POST', credentials, aliceCookie);
+      assert.equal(failed.status, 500);
+      assert.equal(failed.headers.getSetCookie().length, 0);
+      assert.equal((await call('/auth/me', 'GET', undefined, aliceCookie)).status, 200);
+    } finally {
+      await pool.query('DROP TRIGGER reject_session ON sessions; DROP FUNCTION reject_session()');
+    }
+  });
+  test('deletion waits for the patient lock before taking a reading lock', async () => {
+    const created = await add();
+    const control = await pool.connect();
+    let deletion: ReturnType<typeof call> | undefined;
+    try {
+      await control.query('BEGIN');
+      await control.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [aliceId]);
+      const pid = (await control.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      deletion = call(`/readings/${created.data.reading.id}`, 'DELETE', undefined, aliceCookie);
+      let blocked = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const result = await pool.query(
+          'SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))) AS blocked',
+          [pid],
+        );
+        if (result.rows[0].blocked) {
+          blocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(blocked, 'the delete must overlap the patient transaction');
+      // The old DELETE CTE held this lock while waiting for the patient, causing a deadlock.
+      const available = await control.query(
+        'SELECT id FROM readings WHERE id=$1 FOR UPDATE NOWAIT',
+        [created.data.reading.id],
+      );
+      assert.equal(available.rowCount, 1);
+    } finally {
+      await control.query('ROLLBACK');
+      control.release();
+      if (deletion) assert.equal((await deletion).status, 204);
+    }
+  });
+  test('overlapping edits and deletions never return a server error', async () => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const created = await add();
+      const id = created.data.reading.id;
+      const [edit, deletion] = await Promise.all([
+        call(`/readings/${id}`, 'PUT', reading({ value: 111 }), aliceCookie),
+        call(`/readings/${id}`, 'DELETE', undefined, aliceCookie),
+      ]);
+      assert.ok([200, 404].includes(edit.status));
+      assert.equal(deletion.status, 204);
+      assert.equal(
+        (await pool.query('SELECT count(*)::int AS count FROM readings WHERE id=$1', [id])).rows[0]
+          .count,
+        0,
+      );
+    }
+  });
+  test('transaction retries roll back partial work and have a fixed retry limit', async () => {
+    let attempts = 0;
+    const id = randomUUID();
+    await transaction(pool, async (client) => {
+      attempts++;
+      await client.query(
+        'INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5)',
+        [id, aliceId, '2026-10-15', 'fasting', 100],
+      );
+      if (attempts === 1)
+        throw Object.assign(new Error('synthetic serialization conflict'), { code: '40001' });
+    });
+    assert.equal(attempts, 2);
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS count FROM readings WHERE id=$1', [id])).rows[0]
+        .count,
+      1,
+    );
+    attempts = 0;
+    await assert.rejects(
+      transaction(pool, async () => {
+        attempts++;
+        throw Object.assign(new Error('synthetic deadlock'), { code: '40P01' });
+      }),
+      { code: '40P01' },
+    );
+    assert.equal(attempts, 3);
+    attempts = 0;
+    await assert.rejects(
+      transaction(pool, async () => {
+        attempts++;
+        throw new Error('non-retryable');
+      }),
+      /non-retryable/,
+    );
+    assert.equal(attempts, 1);
   });
   test('authentication throttling is enforced without blocking health or profile reads', async () => {
     const config = loadConfig({
