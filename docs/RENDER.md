@@ -4,6 +4,8 @@ The root `render.yaml` creates a free Node web service and a free PostgreSQL dat
 
 Render runs the locked dependency install and both production builds. Startup applies checksum-verified migrations under a PostgreSQL advisory lock before accepting traffic. Database credentials and the generated metrics token stay in Render environment variables.
 
+The Blueprint explicitly trusts private and loopback proxy address ranges so Express can use the forwarded client address for login throttling. It does not enable blanket proxy trust. Recheck this configuration if the hosting network topology changes.
+
 This is a single-process assessment demo. Authentication throttles are process-local, and Redis caching and scheduled reminder workers are disabled. Do not increase the API process count without shared Redis rate limiting. For persistent operation, backups, dedicated migration credentials, workers, and horizontal scaling, use the production setup in `OPERATIONS.md`.
 
 Free web services sleep after 15 minutes without traffic, so the first request can take longer. Free PostgreSQL expires 30 days after creation. Back up any data before expiry. Use synthetic readings for the public assessment demo.

@@ -15,3 +15,6 @@ playwright-report/
 # Deployment secrets, certificates and database backups
 deploy/certs/
 *.dump
+
+# Generated submission recordings and capture review artifacts
+output/

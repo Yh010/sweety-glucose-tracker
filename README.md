@@ -2,6 +2,8 @@
 
 A private blood glucose journal for the Kenpath assessment. Record four meal-based readings per day and review daily, month-to-date and previous-month reports.
 
+**Live assessment demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account to try it. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
+
 - `frontend/`: React, TypeScript, Tailwind, TanStack Query. No shadcn.
 - `backend/`: Node.js, Express, TypeScript, PostgreSQL. No MongoDB.
 - Each project installs, builds and runs independently.
@@ -113,14 +115,14 @@ frontend/
 
 All routes start with `/api`. Mutations need JSON and `X-Requested-With: Sweety`. Authentication uses a session cookie. See [examples](docs/API.md).
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| POST | `/auth/register`, `/auth/login`, `/auth/logout` | Account/session actions |
-| GET | `/auth/me`, `/meta`, `/health` | Profile, timezone/date, readiness |
-| GET | `/readings?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=20` | Paginated readings |
-| POST | `/readings` | Create |
-| PUT / DELETE | `/readings/:id` | Update / delete |
-| GET | `/reports?date=YYYY-MM-DD&period=daily` | `daily`, `mtd`, `monthly` reports |
+| Method       | Route                                                     | Purpose                           |
+| ------------ | --------------------------------------------------------- | --------------------------------- |
+| POST         | `/auth/register`, `/auth/login`, `/auth/logout`           | Account/session actions           |
+| GET          | `/auth/me`, `/meta`, `/health`                            | Profile, timezone/date, readiness |
+| GET          | `/readings?from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&limit=20` | Paginated readings                |
+| POST         | `/readings`                                               | Create                            |
+| PUT / DELETE | `/readings/:id`                                           | Update / delete                   |
+| GET          | `/reports?date=YYYY-MM-DD&period=daily`                   | `daily`, `mtd`, `monthly` reports |
 
 ## Notes and assumptions
 
