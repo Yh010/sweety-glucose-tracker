@@ -56,6 +56,14 @@ const schema = z
           return false;
         }
       }, 'Use a valid IANA timezone'),
+    REPORT_CACHE_REDIS_URL: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z
+        .string()
+        .url()
+        .refine((value) => ['redis:', 'rediss:'].includes(new URL(value).protocol))
+        .optional(),
+    ),
     REDIS_URL: z.preprocess(
       (v) => (v === '' ? undefined : v),
       z

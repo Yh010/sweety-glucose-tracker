@@ -6,7 +6,8 @@ import { createApp } from './app.js';
 const config = loadConfig();
 const pool = createPool(config);
 await pool.query('SELECT 1');
-const reportCache = config.REDIS_URL ? connectReportCache(config.REDIS_URL) : undefined;
+const cacheUrl = config.REPORT_CACHE_REDIS_URL ?? config.REDIS_URL;
+const reportCache = cacheUrl ? connectReportCache(cacheUrl) : undefined;
 const app = createApp(pool, config, reportCache?.cache);
 const server = app.listen(config.PORT, () =>
   console.log(`Sweety API listening on port ${config.PORT}`),

@@ -11,3 +11,7 @@ playwright-report/
 *.tsbuildinfo
 
 .impeccable/review/
+
+# Deployment secrets, certificates and database backups
+deploy/certs/
+*.dump

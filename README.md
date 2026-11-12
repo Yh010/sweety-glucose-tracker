@@ -135,7 +135,7 @@ All routes start with `/api`. Mutations need JSON and `X-Requested-With: Sweety`
 
 ### With more time
 
-Password recovery, email verification, patient timezones, export, more device/browser coverage. Before real patient use: applicable privacy requirements, monitoring, backup/restore, retention and an audit trail. At higher traffic: a shared rate-limit store and scheduled session cleanup. Benchmark the optional report cache and tune it from measured query costs. Current auth throttling is per process; configure Express proxy trust deliberately when deploying behind a trusted proxy.
+Password recovery, email verification, patient timezones and more physical-device/browser coverage. Before real patient use: applicable privacy requirements, monitoring, backup/restore, retention and an audit trail. Shared rate limits, bounded password workers, request admission and scheduled session cleanup are implemented; deployment sizing still requires measured traffic. Benchmark the optional report cache and tune it from measured query costs. Current auth throttling is per process; configure Express proxy trust deliberately when deploying behind a trusted proxy.
 
 ## Production build
 
@@ -186,3 +186,17 @@ npm run test:extras --prefix backend
 ```
 
 This suite uses a random database schema and Redis key prefix and removes only its own data. It verifies caching, patient isolation, create/edit/delete invalidation, late old cache writes, Redis disconnection fallback, CSV bytes, reminder idempotency, a real BullMQ job and timezone-aware scheduling. CI runs it against PostgreSQL 18 and Redis 7.
+
+## Reliability and deployment hardening
+
+The [hardening evidence](docs/HARDENING.md) tracks the senior review and its regression tests. Registration/session replacement are atomic; reading writes use consistent lock order and bounded transaction retries. PUT requests require a record version, preventing stale edits from overwriting newer values. Cross-tab reading updates preserve typed drafts; explicit refresh supports other devices without reloading forms on focus.
+
+Password hashing runs on bounded worker threads. Multiple API processes require shared Redis authentication limits and explicit trusted proxies. Configured process pools must fit a declared PostgreSQL connection budget; per-process request queues are bounded. Reminder work checkpoints each batch, and cleanup removes expired sessions/old reminder logs without deleting patient readings.
+
+See [deployment and recovery](docs/OPERATIONS.md) for the production Compose setup, independent database roles, HTTPS, metrics, connection budgets, maintenance, backup/restore and coordinated rollback. The production container checks run in GitHub Actions because Docker is unavailable on the local Windows machine. A public production deployment is a separate action.
+
+```sh
+npm run bench:local --prefix backend
+```
+
+The bounded workload check uses a disposable database schema and its own loopback API; JSON evidence is written to backend/.local/load-check.json. It is a local/CI regression baseline, not a production user-capacity guarantee.

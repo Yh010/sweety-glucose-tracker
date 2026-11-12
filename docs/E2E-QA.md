@@ -1,15 +1,15 @@
 # End-to-end QA report
 
-Tested on 11 November 2026 with Google Chrome, Node.js 24, Express, PostgreSQL 18 and a real Redis-compatible server on Windows. CI runs the same suites with PostgreSQL 18 and Redis 7 on Ubuntu.
+Tested on 12 November 2026 with Google Chrome, Node.js 24, Express, PostgreSQL 18 and a real Redis-compatible server on Windows. CI runs the same suites with PostgreSQL 18 and Redis 7 on Ubuntu.
 
 ## Results
 
 | Check | Result |
 | --- | --- |
-| Desktop browser scenarios | 18 passed |
-| Mobile browser scenarios | 18 passed |
-| Backend unit/integration tests | 26 passed |
-| Redis/BullMQ/CSV integration tests | 7 passed |
+| Desktop browser scenarios | 20 passed |
+| Mobile browser scenarios | 20 passed |
+| Backend unit/integration tests | 42 passed |
+| Redis/BullMQ/CSV integration tests | 10 passed |
 | Frontend unit/component tests | 15 passed |
 | Backend/frontend production builds and strict type checks | Passed |
 | Automated accessibility checks in browser flows | Zero violations |
@@ -61,3 +61,7 @@ Playwright writes frontend/playwright-report and frontend/test-results (ignored 
 ## Limits
 
 Mobile coverage is Chromium phone emulation, not a physical iPhone or Safari. Firefox and WebKit are untested. Automated accessibility checks do not replace manual screen-reader review. Docker Compose was not run locally because Docker is unavailable. No public deployment, multi-instance failover, production-scale load benchmark or live PostgreSQL/Redis service restart was tested. Cache disconnection and browser request failures were exercised without stopping shared services. These checks establish behavior in the tested scope, not proof that every possible defect is absent.
+
+## Senior-review hardening regression
+
+The complete 40-scenario browser suite passes after versioned updates, reading-change synchronization and explicit refresh. The backend suite now passes 42 tests and the Redis/worker suite 10. See [hardening evidence](HARDENING.md) for atomic session writes, consistent lock order, bounded retries/password work/admission, shared limits, protected metrics, durable reminder checkpoints and cleanup tests. A 306-request local workload check passes separately. Production containers, HTTPS, backup restoration and restart recovery are CI gates; their result must be checked before marking that verification complete.

@@ -1,0 +1,119 @@
+x-application: &application
+  NODE_ENV: production
+  PORT: 4000
+  DATABASE_URL: postgresql://sweety_runtime:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD}@postgres:5432/sweety
+  APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to the public HTTPS origin}
+  APP_TIMEZONE: Asia/Kolkata
+  REDIS_URL: redis://redis:6379
+  REPORT_CACHE_REDIS_URL: redis://cache:6379
+  RATE_LIMIT_REDIS_URL: redis://redis:6379
+  TRUST_PROXY: ${SWEETY_PROXY_IP:-172.30.0.10}/32
+  METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN}
+  API_PROCESSES: ${API_PROCESSES:-1}
+  WORKER_PROCESSES: ${WORKER_PROCESSES:-1}
+  DB_CONNECTION_BUDGET: ${DB_CONNECTION_BUDGET:-80}
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: sweety
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_MIGRATION_PASSWORD: ${POSTGRES_MIGRATION_PASSWORD:?Set POSTGRES_MIGRATION_PASSWORD}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD}
+    volumes:
+      - production_postgres:/var/lib/postgresql
+      - ./deploy/init-app-db.sh:/docker-entrypoint-initdb.d/01-app-roles.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d sweety]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes: [production_queue:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [redis-server, --maxmemory, 64mb, --maxmemory-policy, allkeys-lru]
+  migrate:
+    image: sweety-api:${SWEETY_IMAGE_TAG:-local}
+    build: ./backend
+    command: [node, dist/db/deploy-migrate-cli.js]
+    environment:
+      <<: *application
+      DATABASE_URL: postgresql://sweety_owner:${POSTGRES_MIGRATION_PASSWORD:?Set POSTGRES_MIGRATION_PASSWORD}@postgres:5432/sweety
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    image: sweety-api:${SWEETY_IMAGE_TAG:-local}
+    build: ./backend
+    restart: unless-stopped
+    environment: *application
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 8s
+      retries: 20
+    stop_grace_period: 20s
+  worker:
+    image: sweety-api:${SWEETY_IMAGE_TAG:-local}
+    command: [node, dist/worker.js]
+    restart: unless-stopped
+    environment: *application
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:4002/internal/metrics',{headers:{Authorization:'Bearer '+process.env.METRICS_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 8s
+      retries: 10
+    stop_grace_period: 20s
+  frontend:
+    image: sweety-web:${SWEETY_IMAGE_TAG:-local}
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${HTTP_PORT:-8080}:80'
+      - '${BIND_ADDRESS:-127.0.0.1}:${HTTPS_PORT:-8443}:443'
+    volumes:
+      - ./deploy/certs:/etc/nginx/certs:ro
+    depends_on:
+      api: { condition: service_healthy }
+    networks:
+      default:
+        ipv4_address: ${SWEETY_PROXY_IP:-172.30.0.10}
+volumes:
+  production_postgres:
+  production_queue:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${SWEETY_SUBNET:-172.30.0.0/24}

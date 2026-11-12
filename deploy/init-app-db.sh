@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set=owner_password="$POSTGRES_MIGRATION_PASSWORD" \
+  --set=runtime_password="$POSTGRES_APP_PASSWORD" <<'SQL'
+CREATE ROLE sweety_owner LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD :'owner_password';
+CREATE ROLE sweety_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD :'runtime_password';
+ALTER DATABASE sweety OWNER TO sweety_owner;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+ALTER SCHEMA public OWNER TO sweety_owner;
+GRANT USAGE ON SCHEMA public TO sweety_runtime;
+SQL

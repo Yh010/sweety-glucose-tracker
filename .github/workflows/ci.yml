@@ -1,9 +1,13 @@
 name: Checks
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore: ['docs/**', 'README.md']
+  pull_request:
+    paths-ignore: ['docs/**', 'README.md']
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:18-alpine
@@ -11,7 +15,7 @@ jobs:
           POSTGRES_USER: sweety
           POSTGRES_PASSWORD: sweety_ci
           POSTGRES_DB: sweety_test
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U sweety -d sweety_test"
           --health-interval 5s --health-timeout 3s --health-retries 10
@@ -47,12 +51,61 @@ jobs:
         env:
           DATABASE_URL: postgresql://sweety:sweety_ci@localhost:5432/unused
       - run: npm run test:extras --prefix backend
+      - run: npm run bench:local --prefix backend
       - run: npm test --prefix frontend
       - run: npm run build --prefix frontend
       - run: npm run format:check --prefix frontend
       # Chrome is included in the hosted Ubuntu image; avoid a second apt/browser install.
       - run: google-chrome --version
       - run: npm run test:e2e --prefix frontend
+      - name: Prepare isolated HTTPS container check
+        run: |
+          mkdir -p deploy/certs
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout deploy/certs/tls.key -out deploy/certs/tls.crt -subj '/CN=localhost' >/dev/null 2>&1
+      - name: Build and start production containers
+        env: &container_environment
+          POSTGRES_ADMIN_PASSWORD: synthetic_ci_admin_1234567890
+          POSTGRES_MIGRATION_PASSWORD: synthetic_ci_owner_1234567890
+          POSTGRES_APP_PASSWORD: synthetic_ci_runtime_1234567890
+          METRICS_TOKEN: synthetic-ci-metrics-token-1234567890
+          APP_ORIGIN: https://localhost:8443
+          SWEETY_IMAGE_TAG: ci
+        run: |
+          docker compose -p sweety-ci -f compose.production.yaml build
+          docker compose -p sweety-ci -f compose.production.yaml up -d
+      - name: Browser check through production HTTPS proxy
+        run: npm run check:production --prefix frontend
+      - name: Database backup and restore into a separate database
+        env: *container_environment
+        run: |
+          set -euo pipefail
+          docker compose -p sweety-ci -f compose.production.yaml exec -T worker node -e "fetch('http://127.0.0.1:4002/internal/metrics',{headers:{Authorization:'Bearer '+process.env.METRICS_TOKEN}}).then(async r=>{if(!r.ok)process.exit(1);const m=await r.json();if(!m.running)process.exit(1);console.log('Worker queue/pool metrics passed')}).catch(()=>process.exit(1))"
+          docker compose -p sweety-ci -f compose.production.yaml stop worker
+          docker compose -p sweety-ci -f compose.production.yaml exec -T postgres pg_dump -U sweety_owner -Fc sweety > backup.dump
+          docker compose -p sweety-ci -f compose.production.yaml exec -T postgres createdb -U postgres -O sweety_owner restore_test
+          docker compose -p sweety-ci -f compose.production.yaml exec -T postgres pg_restore -U sweety_owner --no-owner --no-acl --exit-on-error -d restore_test < backup.dump
+          fingerprint_sql="COPY (SELECT 'users' AS entity,to_jsonb(t) AS record FROM users t UNION ALL SELECT 'sessions',to_jsonb(t) FROM sessions t UNION ALL SELECT 'readings',to_jsonb(t) FROM readings t UNION ALL SELECT 'reminder_events',to_jsonb(t) FROM reminder_events t UNION ALL SELECT 'reminder_runs',to_jsonb(t) FROM reminder_runs t UNION ALL SELECT 'schema_migrations',to_jsonb(t) FROM schema_migrations t ORDER BY entity,record) TO STDOUT"
+          source_digest=$(docker compose -p sweety-ci -f compose.production.yaml exec -T postgres psql -U sweety_owner -d sweety -Atc "$fingerprint_sql" | sha256sum | cut -d' ' -f1)
+          restored_digest=$(docker compose -p sweety-ci -f compose.production.yaml exec -T postgres psql -U sweety_owner -d restore_test -Atc "$fingerprint_sql" | sha256sum | cut -d' ' -f1)
+          test "$source_digest" = "$restored_digest"
+          restored_count=$(docker compose -p sweety-ci -f compose.production.yaml exec -T postgres psql -U sweety_owner -d restore_test -Atc 'SELECT count(*) FROM readings')
+          test "$restored_count" -eq 1
+          docker compose -p sweety-ci -f compose.production.yaml run --rm -e DATABASE_URL="postgresql://sweety_owner:${POSTGRES_MIGRATION_PASSWORD}@postgres:5432/restore_test" migrate
+          runtime_count=$(docker compose -p sweety-ci -f compose.production.yaml exec -T postgres psql -U sweety_runtime -d restore_test -Atc 'SELECT count(*) FROM readings')
+          test "$runtime_count" -eq 1
+      - name: Recover after restarting application and data services
+        env: *container_environment
+        run: |
+          docker compose -p sweety-ci -f compose.production.yaml restart postgres redis cache api worker
+          npm run check:production --prefix frontend
+      - name: Container diagnostics on failure
+        if: failure()
+        env: *container_environment
+        run: docker compose -p sweety-ci -f compose.production.yaml logs --tail=100
+      - name: Stop isolated test containers
+        if: always()
+        env: *container_environment
+        run: docker compose -p sweety-ci -f compose.production.yaml down
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -60,4 +113,5 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+            backend/.local/load-check.json
           retention-days: 7

@@ -1,13 +1,13 @@
 # Verification
 
-Checked on 11 November 2026 with Node.js 24, PostgreSQL 18, a real Redis-compatible server and Chrome on Windows.
+Checked on 12 November 2026 with Node.js 24, PostgreSQL 18, a real Redis-compatible server and Chrome on Windows.
 
 | Check | Result |
 | --- | --- |
-| Backend unit/API tests | 26 passed against PostgreSQL; no skips |
-| Optional cache/queue/CSV integration | 7 passed |
+| Backend unit/API tests | 42 passed against PostgreSQL; no skips |
+| Optional cache/queue/CSV integration | 10 passed |
 | Frontend unit/component tests | 15 passed |
-| Browser suite | 36 passed across desktop and phone emulation |
+| Browser suite | 40 passed across desktop and phone emulation |
 | Production builds and strict type checking | Passed |
 | Formatting | Passed |
 
@@ -15,4 +15,6 @@ See [the detailed QA report](E2E-QA.md) for findings, corrections, coverage, rer
 
 The local Windows database encoding issue was corrected using UTF-8 databases. Existing data was preserved: 70 accounts, 82 sessions, 291 readings and 59 reminder events at migration time. Original databases were retained. The development API and reminder worker use the UTF-8 database. A demo API login/report smoke check also passed after the switch.
 
-CI runs real PostgreSQL 18 and Redis 7 plus the browser tests. GitHub Actions results for the current commit should be checked after pushing. No public deployment, physical-device test or production load benchmark has been performed. Docker Compose is provided but has not been run locally.
+CI runs real PostgreSQL 18 and Redis 7 plus the browser tests. GitHub Actions results for the current commit should be checked after pushing. No public deployment, physical-device test or production load benchmark has been performed. Production container, HTTPS, backup/restore and restart gates are configured in CI; local Docker remains unavailable.
+
+The senior-review work is tracked in [HARDENING.md](HARDENING.md), with operational procedures in [OPERATIONS.md](OPERATIONS.md). A separate 306-request local reading/report workload completed with no server errors at 2/5/10 concurrent synthetic users. This is not a production capacity or recovery-time guarantee. The production CI gates remain pending until the pushed run finishes.
