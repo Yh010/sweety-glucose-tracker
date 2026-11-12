@@ -4,6 +4,8 @@ A private blood glucose journal for the Kenpath assessment. Record four meal-bas
 
 **Live assessment demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account to try it. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
 
+**Submission evidence:** [Video, screenshots and verification](docs/SUBMISSION.md).
+
 - `frontend/`: React, TypeScript, Tailwind, TanStack Query. No shadcn.
 - `backend/`: Node.js, Express, TypeScript, PostgreSQL. No MongoDB.
 - Each project installs, builds and runs independently.

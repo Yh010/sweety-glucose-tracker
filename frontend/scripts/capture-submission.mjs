@@ -151,6 +151,8 @@ try {
   await expect(page.getByRole('heading', { name: 'Your month, one day at a time' })).toBeVisible();
   await scene('Month-to-date trends and summary statistics', 10, '09-month-to-date.png');
   await button('Previous month').click();
+  await expect(page.getByRole('img', { name: 'Daily average glucose readings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Previous month', exact: true })).toBeVisible();
   await scene('The complete previous calendar month', 10, '10-previous-month.png');
   await logout();
   await scene('Log out to end the private session', 5);
