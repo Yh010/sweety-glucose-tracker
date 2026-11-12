@@ -45,7 +45,7 @@ The first container CI run passed the HTTPS browser workflow and full backup/res
 
 ## Final completion evidence
 
-[GitHub Actions run 43158156574](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43158156574) passed for runtime commit `801e2bce9e6e71173ad823e9d997cb1b1b50382a` on 12 November 2026:
+[GitHub Actions run 43159420255](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43159420255) passed for runtime commit `801e2bce9e6e71173ad823e9d997cb1b1b50382a` on 12 November 2026:
 
 - 45 backend tests, 10 PostgreSQL/Redis/BullMQ integration tests, 15 frontend tests and 40 desktop/mobile browser scenarios: 110 tests, no skips/failures.
 - Backend/frontend builds, strict type checks, formatting and the isolated 306-request workload check passed.
@@ -57,3 +57,5 @@ The first container CI run passed the HTTPS browser workflow and full backup/res
 All eight review findings have concrete implementations and verification. Documentation-only follow-up changes do not alter the runtime commit tested above. Public hosting, external monitoring/backup services, production traffic sizing and multi-host disaster recovery require the chosen deployment environment; they are not claimed by these local/CI checks.
 
 The [retained CI workload data](evidence/load-check-ci.json) and [production screenshot](screenshots/production-desktop.png) are committed so evidence remains available after temporary Actions artifacts expire. The artifact uploader explicitly includes the selected hidden load-check path; no environment files or private certificate directories are included.
+
+The final evidence run passed on commit `42b988b6f163f53e07d0c156719a5b616937a64a`; application runtime files are unchanged from `801e2bc`. Its downloaded artifact was inspected and contains the 306-request, zero-server-error load report.

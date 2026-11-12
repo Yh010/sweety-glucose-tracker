@@ -1,6 +1,6 @@
 # Deployment and recovery
 
-The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. No live public deployment is claimed. The container, browser, backup/restore and restart checks passed in [CI run 43158156574](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43158156574).
+The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. No live public deployment is claimed. The container, browser, backup/restore and restart checks passed in [CI run 43159420255](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43159420255).
 
 ## Configure and start
 
@@ -72,7 +72,7 @@ docker compose --env-file deploy/.env.local -p sweety -f compose.production.yaml
 
 Restore into a new database first; createdb refuses an existing name. Verify records and constraints there before changing any application URL. Reapply runtime grants using the deployment migration command with its DATABASE_URL pointed at the restored database. Do not compare a live, changing source database to an older snapshot and call every difference a restoration failure. CI pauses background writes and compares canonical content digests of all six tables between source and restored snapshots, then verifies runtime-role access.
 
-For recovery, keep traffic paused while selecting the verified restored database, applying grants and checking login/CRUD/reports. Resume traffic after readiness and a smoke check pass. Never drop the current database as the first recovery step. Define and measure acceptable data loss and recovery time before real usage; a successful small CI restore does not establish those targets for a large database.
+For recovery, keep traffic paused while selecting the verified restored database and applying grants. Before allowing reads from an older snapshot, clear the dedicated report-cache database with `docker compose --env-file deploy/.env.local -p sweety -f compose.production.yaml exec -T cache redis-cli FLUSHDB`; restored version counters can otherwise reuse cache keys from a later database state. This command targets only the separate evictable `cache` service, never the durable queue Redis. Reopen browser views after cutover and check login/CRUD/reports. Resume traffic after readiness and a smoke check pass. Never drop the current database as the first recovery step. Define and measure acceptable data loss and recovery time before real usage; a successful small CI restore does not establish those targets for a large database.
 
 ## Roll out and roll back
 
