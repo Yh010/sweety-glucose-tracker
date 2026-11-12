@@ -1,6 +1,6 @@
 # Deployment and recovery
 
-The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. No live public deployment is claimed. CI must pass the container, browser, backup/restore and restart checks before treating this configuration as verified.
+The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. No live public deployment is claimed. The container, browser, backup/restore and restart checks passed in [CI run 43158156574](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43158156574).
 
 ## Configure and start
 

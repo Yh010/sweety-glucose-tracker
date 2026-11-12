@@ -9,13 +9,13 @@ This tracks the eight findings from the senior engineering review. Completion re
 - [x] Database connection budgets, bounded admission and overload handling.
 - [x] Batched maintenance/reminders with resumable progress and retention.
 - [x] Reading-change synchronization and protection against outdated edits.
-- [ ] Timing/queue/pool visibility, bounded load checks and recovery/deployment procedures.
+- [x] Timing/queue/pool visibility, bounded load checks and recovery/deployment procedures.
 
 All regression fixtures must use disposable test schemas/prefixes. Demo data and shared services remain intact. The application remains a modular monolith.
 
 ## Verified: transaction correctness
 
-The PostgreSQL suite passes 31 tests, including fault-injected session failures, preservation of an existing session after failed login replacement, a deterministic lock-order regression, overlapping edit/delete requests, retry rollback, retry exhaustion and no retry for arbitrary errors. Backend strict type checking and the production build pass. Registration/session replacement commit before cookies are sent; expired-session cleanup is removed from the login path and will run in batched maintenance.
+The PostgreSQL suite passes 31 tests, including fault-injected session failures, preservation of an existing session after failed login replacement, a deterministic lock-order regression, overlapping edit/delete requests, retry rollback, retry exhaustion and no retry for arbitrary errors. Backend strict type checking and the production build pass. Registration/session replacement commit before cookies are sent; expired-session cleanup is removed from the login path and runs in batched maintenance.
 
 ## Verified: password work isolation
 
@@ -37,8 +37,23 @@ Protected worker metrics expose queue counts, database pool pressure and the lat
 
 `npm run bench:local --prefix backend` creates a disposable schema and its own loopback API. It cannot target a third-party server. The 306-request reading/report workload passed at 2, 5 and 10 concurrent synthetic users with four PostgreSQL connections and an active-request cap of eight. Observed client p95 latency was 55, 23 and 46 ms respectively; server errors were zero. These short local measurements do not establish a production capacity limit. JSON evidence is written to backend/.local/load-check.json and will be collected in CI.
 
-Remaining verification: production container startup/browser workflow, database backup/restore, explicit rollback/recovery instructions, final full regression/CI run. Docker is unavailable on this Windows machine; container checks must run in GitHub Actions.
+Production startup/browser, backup/restore and restart recovery are now verified in GitHub Actions. Docker remains unavailable on the local Windows machine; the container evidence comes from the Ubuntu CI runner.
 
 ## Production CI feedback
 
-The first container CI run passed the HTTPS browser workflow and full backup/restore content comparison, but failed the service-restart gate: the API was healthy inside its container while Nginx kept using its old address. The proxy now resolves API addresses dynamically through Docker DNS. The recovery gate remains required; success will be recorded only after a passing rerun. Follow-up guards cover worker initialization failure, source-worker loading from different working directories, sanitized malformed Redis configuration and shared-limit readiness.
+The first container CI run passed the HTTPS browser workflow and full backup/restore content comparison, but failed the service-restart gate: the API was healthy inside its container while Nginx kept using its old address. The proxy now resolves API addresses dynamically through Docker DNS. The corrected recovery gate passed on the final rerun. Follow-up guards cover worker initialization failure, source-worker loading from different working directories, sanitized malformed Redis configuration and shared-limit readiness.
+
+## Final completion evidence
+
+[GitHub Actions run 43158156574](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43158156574) passed for runtime commit `801e2bce9e6e71173ad823e9d997cb1b1b50382a` on 12 November 2026:
+
+- 45 backend tests, 10 PostgreSQL/Redis/BullMQ integration tests, 15 frontend tests and 40 desktop/mobile browser scenarios: 110 tests, no skips/failures.
+- Backend/frontend builds, strict type checks, formatting and the isolated 306-request workload check passed.
+- Production Docker images built and ran with migration/runtime roles separated. The HTTPS browser check verified redirect/security headers, secure HttpOnly cookies, signup, saving a reading, reports, CSV and logout.
+- Backup/restore compared canonical digests across all six tables, reapplied runtime grants to the restored database and verified runtime-role access. CI also confirmed the runtime role cannot create schema objects, create roles/databases or inherit the owner role.
+- The same HTTPS browser flow passed after restarting the API, worker, PostgreSQL, durable queue Redis and report-cache Redis. Dynamic proxy DNS resolved the changed API address.
+- Worker queue/pool metrics passed. Locally, the maintenance CLI and a real BullMQ maintenance-job dispatch also passed. The refreshed local worker is running; the demo login/versioned-report smoke and temporary-schema cleanup checks passed.
+
+All eight review findings have concrete implementations and verification. Documentation-only follow-up changes do not alter the runtime commit tested above. Public hosting, external monitoring/backup services, production traffic sizing and multi-host disaster recovery require the chosen deployment environment; they are not claimed by these local/CI checks.
+
+The [retained CI workload data](evidence/load-check-ci.json) and [production screenshot](screenshots/production-desktop.png) are committed so evidence remains available after temporary Actions artifacts expire. The artifact uploader explicitly includes the selected hidden load-check path; no environment files or private certificate directories are included.

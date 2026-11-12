@@ -1,0 +1,45 @@
+{
+  "result": {
+    "scope": "isolated local reading/report workload; not a production capacity claim",
+    "databasePool": 4,
+    "activeRequestLimit": 8,
+    "results": [
+      {
+        "concurrency": 2,
+        "requests": 36,
+        "elapsedMs": 164,
+        "requestsPerSecond": 220,
+        "p95Ms": 41,
+        "maxMs": 42,
+        "peakDatabaseWaiting": 0
+      },
+      {
+        "concurrency": 5,
+        "requests": 90,
+        "elapsedMs": 216,
+        "requestsPerSecond": 417,
+        "p95Ms": 59,
+        "maxMs": 66,
+        "peakDatabaseWaiting": 1
+      },
+      {
+        "concurrency": 10,
+        "requests": 180,
+        "elapsedMs": 431,
+        "requestsPerSecond": 418,
+        "p95Ms": 120,
+        "maxMs": 141,
+        "peakDatabaseWaiting": 4
+      }
+    ],
+    "metrics": {
+      "requests": 306,
+      "serverErrors": 0,
+      "averageMs": 16,
+      "recentP95Ms": 69,
+      "recentSamples": 256
+    }
+  },
+  "runtimeCommit": "801e2bce9e6e71173ad823e9d997cb1b1b50382a",
+  "ciRun": "https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43158156574"
+}
