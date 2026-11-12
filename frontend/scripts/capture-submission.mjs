@@ -61,6 +61,10 @@ const context = await browser.newContext({
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
+page.on('response', (response) => {
+  if (response.status() >= 500)
+    errors.push(`HTTP ${response.status()}: ${new URL(response.url()).pathname}`);
+});
 const scenes = [];
 const started = Date.now();
 async function scene(title, seconds = 6, screenshot) {

@@ -30,7 +30,18 @@ try {
   const redirect = await context.request.get('http://localhost:8080/', { maxRedirects: 0 });
   assert.equal(redirect.status(), 308);
   assert.equal(redirect.headers().location, `${base}/`);
-  const response = await page.goto(base);
+  let response;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      response = await page.goto(base);
+      break;
+    } catch (error) {
+      // Docker network changes can invalidate Chrome's first navigation after restart.
+      // Retry only this transport error, before any account or reading is submitted.
+      if (!String(error).includes('net::ERR_NETWORK_CHANGED') || attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
   assert.ok(response?.ok());
   assert.match(response.headers()['content-security-policy'] ?? '', /default-src 'self'/);
   assert.ok(response.headers()['strict-transport-security']);
