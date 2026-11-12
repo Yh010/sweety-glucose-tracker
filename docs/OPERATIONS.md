@@ -1,6 +1,6 @@
 # Deployment and recovery
 
-The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. No live public deployment is claimed. The container, browser, backup/restore and restart checks passed in [CI run 43159420255](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43159420255).
+The production Compose file runs the compiled API/worker, built React files behind an HTTPS Nginx proxy, PostgreSQL, durable queue Redis and a separate evictable report cache. The smaller public demo runs on Render; see [its deployment configuration](RENDER.md) for the differences. The container, browser, backup/restore and restart checks passed in [CI run 43159420255](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43159420255).
 
 ## Configure and start
 
@@ -24,7 +24,7 @@ docker compose --env-file deploy/.env.local -p sweety -f compose.production.yaml
 
 PostgreSQL initializes separate owner and runtime roles. The one-shot migration service uses the owner; the API and worker use a non-superuser runtime role with data access only. Startup waits for migrations and grants. Database and Redis ports are not published. Backend containers run as the Node user. Queue Redis has persistence/no eviction; report-cache Redis has a separate memory budget and eviction. A cache outage falls back to PostgreSQL.
 
-Use tagged images for a release: set SWEETY_IMAGE_TAG to a commit SHA before building. Keep the prior images and the matching source checkout for rollback. Only the container build/check workflow is automated here; publishing to a host requires the user's chosen infrastructure and approval.
+Use tagged images for a release: set SWEETY_IMAGE_TAG to a commit SHA before building. Keep the prior images and the matching source checkout for rollback. CI builds and checks the containers; provision the target infrastructure before deploying them.
 
 ## Size the deployment
 

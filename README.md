@@ -1,15 +1,13 @@
 # Sweety
 
-A private blood glucose journal for the Kenpath assessment. Record four meal-based readings per day and review daily, month-to-date and previous-month reports.
+A private blood glucose journal. Record four meal-based readings per day and review daily, month-to-date and previous-month reports.
 
-**Live assessment demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account or use the sample account below. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
+**Live demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account to try it. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
 
-Hosted demo sign-in details are supplied separately in the assessment email. The sample account shown in the walkthrough has current-month and previous-month readings; login and all three report periods were verified on 12 November 2026. The local seed credentials below are separate.
+**Demo walkthrough:** [Video, screenshots and verification](docs/SUBMISSION.md).
 
-**Submission evidence:** [Video, screenshots and verification](docs/SUBMISSION.md).
-
-- `frontend/`: React, TypeScript, Tailwind, TanStack Query. No shadcn.
-- `backend/`: Node.js, Express, TypeScript, PostgreSQL. No MongoDB.
+- `frontend/`: React, TypeScript, Tailwind, TanStack Query.
+- `backend/`: Node.js, Express, TypeScript, PostgreSQL.
 - Each project installs, builds and runs independently.
 
 ## Local setup
@@ -53,7 +51,7 @@ npm run dev --prefix frontend
 
 Open **http://localhost:5173**. Use this exact origin to match `APP_ORIGIN`; update that setting if you change the frontend host/port. Health: `http://localhost:4000/api/health`.
 
-**Demo login:** `demo@sweety.local` / `SweetyDemo123!`. These are public local-evaluation credentials. All demo readings are synthetic. Seeding covers this month and the previous month; repeating it preserves an existing demo account and its data. `DEMO_EMAIL` and `DEMO_PASSWORD` are configurable.
+**Local demo login:** `demo@sweety.local` / `SweetyDemo123!`. All demo readings are synthetic. Seeding covers this month and the previous month; repeating it preserves an existing demo account and its data. `DEMO_EMAIL` and `DEMO_PASSWORD` are configurable.
 
 No frontend environment variables are required. Vite proxies `/api` to port 4000. Fonts are bundled locally.
 
@@ -75,7 +73,7 @@ API tests use actual PostgreSQL, including simultaneous requests, database const
 
 Browser tests use Google Chrome by default and start dedicated servers on ports 5174/4001. They require TEST_DATABASE_URL ending in `_test`, create a random schema, and drop only that schema during teardown. They never reuse the demo servers or write to the demo database. Alternatively install Chromium from `frontend/` with `npx playwright install chromium` and set `PLAYWRIGHT_CHANNEL=chromium`. CI uses the Chrome already installed on the hosted Ubuntu runner. Browser tests create synthetic accounts in their own disposable schema. Their isolated API allows 1,000 authentication attempts per window; the normal app keeps its default limit of 30 attempts per IP per 15 minutes, verified by a separate integration test. Mobile tests emulate a phone viewport; physical-device testing remains future work.
 
-With both servers running, `npm run review:ui --prefix frontend` regenerates demo screenshots and automated WCAG checks under `.impeccable/review/`. Submission screenshots are in `docs/screenshots/`.
+With both servers running, `npm run review:ui --prefix frontend` regenerates demo screenshots and automated WCAG checks under `.impeccable/review/`. Desktop and mobile screenshots are in `docs/screenshots/`.
 
 ## Structure
 
@@ -106,7 +104,7 @@ frontend/
 
 ## Design and scalability decisions
 
-- One modular API with clear feature boundaries. No unnecessary services or queues.
+- One modular API with clear feature boundaries. Redis caching and the reminder worker are optional.
 - A unique `(user_id,date,slot)` constraint and four-value slot check cap each day at four readings. Integer/range constraints protect values.
 - Creates/updates lock the owning user row inside a transaction. One patient's writes serialize; other patients write concurrently. Database uniqueness is the final guard.
 - Reports use indexed user/date filters and SQL aggregates. Month responses contain at most 124 readings. The reading list is paginated, with limit capped at 100.
@@ -130,13 +128,13 @@ All routes start with `/api`. Mutations need JSON and `X-Requested-With: Sweety`
 
 ## Notes and assumptions
 
-- PostgreSQL follows the explicit requirement despite the assignment's MERN title. No AI feature is required.
+- PostgreSQL is the primary data store; Redis is optional for caching and background jobs.
 - Registration signs users in. Emails are normalized. Names: max 80 characters; emails: max 254; passwords: min eight characters and max 72 UTF-8 bytes (bcrypt limit).
 - Default timezone: `Asia/Kolkata`, shown in the UI. Dates start at 1900 and cannot be future dates. Midnight updates preserve the selected day and draft; date navigation is locked during pending writes. Per-patient timezones are future work.
 - All reading fields are editable. Conflicting edits roll back. Creating on a full day reports the daily limit first; other duplicates report the slot conflict. Updates exclude their own row from the count.
 - For 15 October, month-to-date means 1-15 October; monthly means 1-30 September. Empty reports return zero count and null aggregates. Averages display one decimal.
 - Charts show daily averages. Missing days have no point; lines connect recorded dates. Daily reports list every reading and slot.
-- Bonuses: pagination, monthly chart, database Docker Compose, reading-form tests, Redis report caching and BullMQ daily reminder logs. Doctor accounts remain optional future work.
+- Optional features: pagination, monthly chart, database Docker Compose, reading-form tests, Redis report caching and BullMQ daily reminder logs. Doctor accounts remain future work.
 - This journal records readings; it does not classify risk or recommend treatment.
 
 ### With more time
@@ -145,11 +143,7 @@ Password recovery, email verification, patient timezones and more physical-devic
 
 ## Production build
 
-Build both projects with the commands above. From `backend/`, run `node dist/db/migrate-cli.js` once as a release step. Start with `npm start --prefix backend`; serve `frontend/dist` through a web server and proxy `/api` to the API on the same public origin. Use HTTPS, `NODE_ENV=production`, the exact public `APP_ORIGIN`, a private database and deployment-managed credentials. Add static security headers at the web server. Do not run the development seed CLI in production. The public assessment demo uses the same-origin Node hosting option described in [Render deployment notes](docs/RENDER.md).
-
-## Submission
-
-Use the public repository link and `docs/screenshots/` when replying to the hiring email. No real credentials, personal readings or assessment email are included. Publishing the repository and sending that email are separate steps.
+Build both projects with the commands above. From `backend/`, run `node dist/db/migrate-cli.js` once as a release step. Start with `npm start --prefix backend`; serve `frontend/dist` through a web server and proxy `/api` to the API on the same public origin. Use HTTPS, `NODE_ENV=production`, the exact public `APP_ORIGIN`, a private database and deployment-managed credentials. Add static security headers at the web server. Do not run the development seed CLI in production. The public demo uses the same-origin Node hosting option described in [Render deployment notes](docs/RENDER.md).
 
 ## Report downloads and easier daily entry
 
@@ -175,7 +169,7 @@ If a Redis-compatible service is already installed, use that instead. Set REDIS_
 npm run worker --prefix backend
 ```
 
-It installs one BullMQ scheduler at REMINDER_HOUR (default 21:00) in APP_TIMEZONE. Patients with fewer than four entries get one reminder_events row per date. Database uniqueness makes retries safe. Logs contain only the date and aggregate count, without names, emails, patient IDs or reading values. This is the assignment's background reminder-log bonus: it does not send notifications or email. Jobs retry three times with exponential backoff; completed and failed job retention is bounded.
+It installs one BullMQ scheduler at REMINDER_HOUR (default 21:00) in APP_TIMEZONE. Patients with fewer than four entries get one reminder_events row per date. Database uniqueness makes retries safe. Logs contain only the date and aggregate count, without names, emails, patient IDs or reading values. The worker records reminder events; it does not send notifications or email. Jobs retry three times with exponential backoff; completed and failed job retention is bounded.
 
 To enqueue an immediate local demonstration while the worker is running:
 
@@ -199,7 +193,7 @@ The [hardening evidence](docs/HARDENING.md) tracks the senior review and its reg
 
 Password hashing runs on bounded worker threads. Multiple API processes require shared Redis authentication limits and explicit trusted proxies. Configured process pools must fit a declared PostgreSQL connection budget; per-process request queues are bounded. Reminder work checkpoints each batch, and cleanup removes expired sessions/old reminder logs without deleting patient readings.
 
-See [deployment and recovery](docs/OPERATIONS.md) for the production Compose setup, independent database roles, HTTPS, metrics, connection budgets, maintenance, backup/restore and coordinated rollback. The production container checks run in GitHub Actions because Docker is unavailable on the local Windows machine. The public assessment demo is hosted separately on Render; its free-tier scope and limits are documented in [RENDER.md](docs/RENDER.md).
+See [deployment and recovery](docs/OPERATIONS.md) for the production Compose setup, independent database roles, HTTPS, metrics, connection budgets, maintenance, backup/restore and coordinated rollback. The production container checks run in GitHub Actions because Docker is unavailable on the local Windows machine. The public demo is hosted separately on Render; its free-tier scope and limits are documented in [RENDER.md](docs/RENDER.md).
 
 ```sh
 npm run bench:local --prefix backend
