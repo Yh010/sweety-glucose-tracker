@@ -7,7 +7,8 @@ const config = loadConfig();
 const pool = createPool(config);
 await pool.query('SELECT 1');
 const reportCache = config.REDIS_URL ? connectReportCache(config.REDIS_URL) : undefined;
-const server = createApp(pool, config, reportCache?.cache).listen(config.PORT, () =>
+const app = createApp(pool, config, reportCache?.cache);
+const server = app.listen(config.PORT, () =>
   console.log(`Sweety API listening on port ${config.PORT}`),
 );
 let stopping = false;
@@ -17,10 +18,13 @@ function shutdown() {
   const timeout = setTimeout(() => process.exit(1), 10000).unref();
   server.close(() => {
     reportCache?.close();
-    void pool.end().then(() => {
-      clearTimeout(timeout);
-      process.exit(0);
-    });
+    void app.locals
+      .closeServices()
+      .then(() => pool.end())
+      .then(() => {
+        clearTimeout(timeout);
+        process.exit(0);
+      });
   });
 }
 process.on('SIGTERM', shutdown);

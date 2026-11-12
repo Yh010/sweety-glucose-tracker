@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import bcrypt from 'bcryptjs';
+import type { Passwords } from './passwords.js';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import type { Pool } from 'pg';
@@ -29,9 +29,8 @@ const registration = z
   })
   .strict();
 const login = z.object({ email, password: z.string().min(1).max(256) }).strict();
-const dummyHash = bcrypt.hashSync('not-a-real-user-password', 12);
 
-export function authRoutes(pool: Pool, config: Config): Router {
+export function authRoutes(pool: Pool, config: Config, passwords: Passwords): Router {
   const router = Router();
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -44,7 +43,7 @@ export function authRoutes(pool: Pool, config: Config): Router {
   });
   router.post('/register', limiter, async (req, res) => {
     const input = registration.parse(req.body);
-    const passwordHash = await bcrypt.hash(input.password, 12);
+    const passwordHash = await passwords.hash(input.password);
     try {
       const { user, token } = await transaction(pool, async (client) => {
         const result = await client.query<User>(
@@ -77,7 +76,7 @@ export function authRoutes(pool: Pool, config: Config): Router {
       [input.email],
     );
     const row = result.rows[0];
-    const valid = await bcrypt.compare(input.password, row?.password_hash ?? dummyHash);
+    const valid = await passwords.compare(input.password, row?.password_hash);
     if (!row || !valid)
       throw new AppError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
     const token = await transaction(pool, async (client) => {

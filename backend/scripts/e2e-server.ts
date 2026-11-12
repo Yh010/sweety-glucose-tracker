@@ -44,6 +44,7 @@ const server = createServer((req, res) => {
 async function shutdown() {
   server.closeAllConnections();
   server.close();
+  await app.locals.closeServices();
   await pool.end();
   await admin.end();
   process.exit(0);

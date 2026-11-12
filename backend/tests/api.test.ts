@@ -24,6 +24,7 @@ if (
   );
 }
 const schema = `test_${randomUUID().replaceAll('-', '')}`;
+let closeServices: () => Promise<void>;
 let admin: Pool, pool: Pool, server: Server, base: string;
 let aliceCookie: string, bobCookie: string, aliceId: string;
 const credentials = { email: 'alice@example.com', password: 'securePassword123!' };
@@ -75,7 +76,9 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
     pool = createPool({ ...config, DATABASE_URL: scoped.toString() });
     await migrate(pool);
     await migrate(pool); // Migration replay must be safe.
-    server = createApp(pool, config).listen(0, '127.0.0.1');
+    const app = createApp(pool, config);
+    closeServices = app.locals.closeServices;
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server.once('listening', resolve));
     const address = server.address();
     assert.ok(address && typeof address === 'object');
@@ -97,6 +100,7 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
   });
   after(async () => {
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (closeServices) await closeServices();
     if (pool) await pool.end();
     if (admin) {
       await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);

@@ -27,6 +27,7 @@ if (!redisUrl)
 const id = randomUUID().replaceAll('-', '');
 const schema = `extras_${id}`;
 const prefix = `test:sweety:${id}`;
+let closeServices: () => Promise<void>;
 let admin: Pool, pool: Pool, redis: Redis, cache: ReportCache, server: Server, base: string;
 let alice: { id: string; cookie: string },
   bob: { id: string; cookie: string },
@@ -64,7 +65,9 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
     redis.on('error', () => {});
     await redis.ping();
     cache = new ReportCache(redis, `${prefix}:reports`);
-    server = createApp(pool, config, cache).listen(0, '127.0.0.1');
+    const app = createApp(pool, config, cache);
+    closeServices = app.locals.closeServices;
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server.once('listening', resolve));
     const address = server.address();
     assert.ok(address && typeof address === 'object');
@@ -103,6 +106,7 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       if (keys.length) await redis.del(...keys);
       redis.disconnect();
     }
+    if (closeServices) await closeServices();
     if (pool) await pool.end();
     if (admin) {
       await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
