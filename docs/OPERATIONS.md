@@ -44,7 +44,7 @@ The API is intentionally a modular monolith. Reports are bounded to a maximum of
 
 ## Observe and maintain
 
-GET /api/live indicates process liveness; GET /api/health checks PostgreSQL readiness and fails while draining. Use readiness to remove traffic; do not use a database-dependent readiness failure as the only reason to restart every API process.
+GET /api/live indicates process liveness; GET /api/health checks PostgreSQL and any configured shared authentication-limit store, and fails while draining. Optional report-cache availability does not block readiness. Use readiness to remove traffic; do not use a database-dependent readiness failure as the only reason to restart every API process.
 
 GET /internal/metrics requires the METRICS_TOKEN bearer secret and exposes aggregate request timing, a bounded recent p95 sample, admission pressure, database waiting and password-worker utilization. Worker metrics use the same authorization on loopback port 4002 inside the worker container and add queue counts/checkpoint progress. Access them through an authenticated local collector or administrative container exec; the port is not published. Never log the bearer token.
 
@@ -79,7 +79,7 @@ For recovery, keep traffic paused while selecting the verified restored database
 1. Take and verify a backup. Record current image tags and migration versions.
 2. Plan a write pause for this assessment deployment. Upgrade the API and matching frontend together because PUT now requires a reading version. Open browsers should reopen the app after deployment; do not silently discard unsaved drafts.
 3. Build the new tagged images, run Compose startup/migrations and check readiness. Migrations 004/005 are additive; never edit applied migration files.
-4. Reload the proxy after replacing/scaling API containers so its upstream addresses are refreshed: `docker compose --env-file deploy/.env.local -p sweety -f compose.production.yaml exec frontend nginx -s reload`.
+4. The proxy refreshes API addresses through Docker DNS with a five-second cache. Reload Nginx only if proxy configuration changes: `docker compose --env-file deploy/.env.local -p sweety -f compose.production.yaml exec frontend nginx -s reload`. The restart regression specifically checks that no manual reload is needed after API/data-service restarts.
 5. Smoke-test signup/login, a reading, reports, export and worker metrics before resuming normal writes.
 6. If rollback is needed, restore the previous API/frontend image tags together from the recorded checkout and start those services again. Keep compatible additive database changes. For a future incompatible migration, pause and use its explicit recovery plan; do not automatically run destructive down-migrations.
 

@@ -8,7 +8,7 @@ Tested on 12 November 2026 with Google Chrome, Node.js 24, Express, PostgreSQL 1
 | --- | --- |
 | Desktop browser scenarios | 20 passed |
 | Mobile browser scenarios | 20 passed |
-| Backend unit/integration tests | 42 passed |
+| Backend unit/integration tests | 45 passed |
 | Redis/BullMQ/CSV integration tests | 10 passed |
 | Frontend unit/component tests | 15 passed |
 | Backend/frontend production builds and strict type checks | Passed |
@@ -64,4 +64,4 @@ Mobile coverage is Chromium phone emulation, not a physical iPhone or Safari. Fi
 
 ## Senior-review hardening regression
 
-The complete 40-scenario browser suite passes after versioned updates, reading-change synchronization and explicit refresh. The backend suite now passes 42 tests and the Redis/worker suite 10. See [hardening evidence](HARDENING.md) for atomic session writes, consistent lock order, bounded retries/password work/admission, shared limits, protected metrics, durable reminder checkpoints and cleanup tests. A 306-request local workload check passes separately. Production containers, HTTPS, backup restoration and restart recovery are CI gates; their result must be checked before marking that verification complete.
+The complete 40-scenario browser suite passes after versioned updates, reading-change synchronization and explicit refresh. The backend suite now passes 45 tests and the Redis/worker suite 10. See [hardening evidence](HARDENING.md) for atomic session writes, consistent lock order, bounded retries/password work/admission, shared limits, protected metrics, durable reminder checkpoints and cleanup tests. A 306-request local workload check passes separately. Production containers, HTTPS, backup restoration and restart recovery are CI gates; their result must be checked before marking that verification complete.

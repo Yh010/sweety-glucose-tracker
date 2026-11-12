@@ -161,7 +161,8 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       const unavailable = await attempt(0, '192.0.2.12');
       assert.equal(unavailable.status, 503);
       assert.equal((await unavailable.json()).error.code, 'RATE_LIMIT_UNAVAILABLE');
-      assert.equal((await fetch(`${urls[0]}/api/health`)).status, 200);
+      assert.equal((await fetch(`${urls[0]}/api/health`)).status, 503);
+      assert.equal((await fetch(`${urls[0]}/api/live`)).status, 200);
     } finally {
       await Promise.all(
         servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),

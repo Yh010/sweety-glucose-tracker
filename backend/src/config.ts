@@ -29,7 +29,7 @@ const schema = z
       z
         .string()
         .url()
-        .refine((value) => ['redis:', 'rediss:'].includes(new URL(value).protocol))
+        .refine((value) => /^rediss?:\/\//i.test(value))
         .optional(),
     ),
     RATE_LIMIT_PREFIX: z
@@ -61,7 +61,7 @@ const schema = z
       z
         .string()
         .url()
-        .refine((value) => ['redis:', 'rediss:'].includes(new URL(value).protocol))
+        .refine((value) => /^rediss?:\/\//i.test(value))
         .optional(),
     ),
     REDIS_URL: z.preprocess(
@@ -69,10 +69,7 @@ const schema = z
       z
         .string()
         .url()
-        .refine(
-          (v) => ['redis:', 'rediss:'].includes(new URL(v).protocol),
-          'Use redis:// or rediss://',
-        )
+        .refine((v) => /^rediss?:\/\//i.test(v), 'Use redis:// or rediss://')
         .optional(),
     ),
     MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(500),

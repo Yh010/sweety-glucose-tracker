@@ -4,7 +4,7 @@ Checked on 12 November 2026 with Node.js 24, PostgreSQL 18, a real Redis-compati
 
 | Check | Result |
 | --- | --- |
-| Backend unit/API tests | 42 passed against PostgreSQL; no skips |
+| Backend unit/API tests | 45 passed against PostgreSQL; no skips |
 | Optional cache/queue/CSV integration | 10 passed |
 | Frontend unit/component tests | 15 passed |
 | Browser suite | 40 passed across desktop and phone emulation |

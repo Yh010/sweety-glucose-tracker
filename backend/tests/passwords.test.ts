@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcryptjs';
+import { Worker } from 'node:worker_threads';
 import { Passwords } from '../src/modules/auth/passwords.js';
 
 test('password hashes stay compatible and execute in a worker thread', async () => {
@@ -43,4 +44,42 @@ test('closing the password pool rejects pending jobs and refuses new work', asyn
   await passwords.close();
   await Promise.all([first, second]);
   await assert.rejects(passwords.hash('AfterClose123!'), { code: 'AUTH_UNAVAILABLE' });
+});
+
+test('thread allocation failure fails fast without retaining queued work', async () => {
+  const passwords = new Passwords(1, 1, () => {
+    throw new Error('synthetic thread allocation failure');
+  });
+  try {
+    for (let i = 0; i < 3; i++)
+      await assert.rejects(passwords.hash('SyntheticThread123!'), {
+        status: 503,
+        code: 'AUTH_UNAVAILABLE',
+      });
+    assert.equal(passwords.snapshot().waiting, 0);
+    assert.equal(passwords.snapshot().running, 0);
+  } finally {
+    await passwords.close();
+  }
+});
+test('an asynchronous worker startup failure rejects active and waiting work', async () => {
+  const passwords = new Passwords(
+    1,
+    1,
+    () =>
+      new Worker(new URL('./nonexistent-synthetic-worker.js', import.meta.url), { execArgv: [] }),
+  );
+  try {
+    const active = assert.rejects(passwords.hash('SyntheticActive123!'), {
+      code: 'AUTH_UNAVAILABLE',
+    });
+    const waiting = assert.rejects(passwords.hash('SyntheticWaiting123!'), {
+      code: 'AUTH_UNAVAILABLE',
+    });
+    await Promise.all([active, waiting]);
+    assert.equal(passwords.snapshot().workers, 0);
+    assert.equal(passwords.snapshot().waiting, 0);
+  } finally {
+    await passwords.close();
+  }
 });

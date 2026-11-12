@@ -38,3 +38,7 @@ Protected worker metrics expose queue counts, database pool pressure and the lat
 `npm run bench:local --prefix backend` creates a disposable schema and its own loopback API. It cannot target a third-party server. The 306-request reading/report workload passed at 2, 5 and 10 concurrent synthetic users with four PostgreSQL connections and an active-request cap of eight. Observed client p95 latency was 55, 23 and 46 ms respectively; server errors were zero. These short local measurements do not establish a production capacity limit. JSON evidence is written to backend/.local/load-check.json and will be collected in CI.
 
 Remaining verification: production container startup/browser workflow, database backup/restore, explicit rollback/recovery instructions, final full regression/CI run. Docker is unavailable on this Windows machine; container checks must run in GitHub Actions.
+
+## Production CI feedback
+
+The first container CI run passed the HTTPS browser workflow and full backup/restore content comparison, but failed the service-restart gate: the API was healthy inside its container while Nginx kept using its old address. The proxy now resolves API addresses dynamically through Docker DNS. The recovery gate remains required; success will be recorded only after a passing rerun. Follow-up guards cover worker initialization failure, source-worker loading from different working directories, sanitized malformed Redis configuration and shared-limit readiness.

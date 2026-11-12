@@ -61,4 +61,4 @@ GET /api/reports/export?date=2026-10-15&period=monthly uses the same authenticat
 
 ## Operational endpoints
 
-GET /api/live checks the API process without querying the database. GET /api/health checks database readiness and returns 503 while draining. GET /internal/metrics is disabled unless METRICS_TOKEN is configured (32+ characters); requests require `Authorization: Bearer <token>`. It exposes aggregate request latency, bounded recent p95 samples, admission counts, database pool counts, password-worker pressure and shared-limit readiness, without patient records. Busy responses include Retry-After.
+GET /api/live checks the API process without querying the database. GET /api/health checks database/shared-auth-limit readiness and returns 503 while draining. GET /internal/metrics is disabled unless METRICS_TOKEN is configured (32+ characters); requests require `Authorization: Bearer <token>`. It exposes aggregate request latency, bounded recent p95 samples, admission counts, database pool counts, password-worker pressure and shared-limit readiness, without patient records. Busy responses include Retry-After.

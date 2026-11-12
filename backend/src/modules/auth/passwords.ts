@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs';
-import { Worker } from 'node:worker_threads';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+import { Worker, type WorkerOptions } from 'node:worker_threads';
 import { AppError } from '../../lib/errors.js';
+
+const spawnWorker = (file: URL, options: WorkerOptions) => new Worker(file, options);
 
 type Job = {
   id: number;
@@ -22,6 +26,7 @@ export class Passwords {
   constructor(
     private concurrency = 2,
     private queueLimit = 16,
+    private spawn = spawnWorker,
   ) {}
 
   hash(password: string): Promise<string> {
@@ -68,10 +73,17 @@ export class Passwords {
       if (!slot) {
         const built = new URL('./password-worker.js', import.meta.url);
         const source = !existsSync(built);
-        const worker = new Worker(
-          source ? new URL('./password-worker.ts', import.meta.url) : built,
-          { execArgv: source ? ['--import', 'tsx'] : [] },
-        );
+        let worker: Worker;
+        try {
+          worker = this.spawn(source ? new URL('./password-worker.ts', import.meta.url) : built, {
+            execArgv: source
+              ? ['--import', pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href]
+              : [],
+          });
+        } catch {
+          this.fail();
+          return;
+        }
         slot = { worker, stopped: false };
         const current = slot;
         this.slots.push(current);
@@ -95,28 +107,35 @@ export class Passwords {
             this.dispatch();
           },
         );
-        const failed = () => {
-          if (current.stopped) return;
-          current.stopped = true;
-          current.job?.reject(this.unavailable());
-          this.slots = this.slots.filter((item) => item !== current);
-          // A broken worker startup must not spawn an unbounded replacement loop.
-          this.waiting.splice(0).forEach((job) => job.reject(this.unavailable()));
-          void worker.terminate();
-        };
+        const failed = () => this.fail(current);
         worker.on('error', failed);
         worker.on('exit', failed);
       }
       const job = this.waiting.shift()!;
       slot.job = job;
-      slot.worker.ref();
-      slot.worker.postMessage({
-        id: job.id,
-        operation: job.operation,
-        password: job.password,
-        hash: job.hash,
-      });
+      try {
+        slot.worker.ref();
+        slot.worker.postMessage({
+          id: job.id,
+          operation: job.operation,
+          password: job.password,
+          hash: job.hash,
+        });
+      } catch {
+        this.fail(slot);
+      }
     }
+  }
+  private fail(slot?: Slot) {
+    if (slot?.stopped) return;
+    if (slot) {
+      slot.stopped = true;
+      slot.job?.reject(this.unavailable());
+      this.slots = this.slots.filter((item) => item !== slot);
+      void slot.worker.terminate();
+    }
+    // Initialization failure must not retain jobs or repeatedly spawn replacements.
+    this.waiting.splice(0).forEach((job) => job.reject(this.unavailable()));
   }
   async close() {
     this.closed = true;

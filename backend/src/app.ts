@@ -106,6 +106,12 @@ export function createApp(pool: Pool, config: Config, cache?: ReportCache) {
     if (admission.snapshot().stopping)
       throw new AppError(503, 'DRAINING', 'The service is restarting. Please try again shortly.');
     await pool.query('SELECT 1');
+    if (rateStore && !rateStore.snapshot().ready)
+      throw new AppError(
+        503,
+        'DEPENDENCY_UNAVAILABLE',
+        'Sign-in is temporarily unavailable. Please try again shortly.',
+      );
     res.json({ status: 'ok' });
   });
   app.get('/api/meta', (_req, res) =>

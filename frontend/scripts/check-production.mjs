@@ -27,6 +27,9 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   assert.ok(ready, 'production containers did not become ready');
+  const redirect = await context.request.get('http://localhost:8080/', { maxRedirects: 0 });
+  assert.equal(redirect.status(), 308);
+  assert.equal(redirect.headers().location, `${base}/`);
   const response = await page.goto(base);
   assert.ok(response?.ok());
   assert.match(response.headers()['content-security-policy'] ?? '', /default-src 'self'/);

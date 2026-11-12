@@ -4,6 +4,9 @@ on:
     paths-ignore: ['docs/**', 'README.md']
   pull_request:
     paths-ignore: ['docs/**', 'README.md']
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -79,6 +82,8 @@ jobs:
         env: *container_environment
         run: |
           set -euo pipefail
+          restricted=$(docker compose -p sweety-ci -f compose.production.yaml exec -T postgres psql -U sweety_runtime -d sweety -Atc "SELECT NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT pg_has_role(current_user,'sweety_owner','MEMBER') FROM pg_roles WHERE rolname=current_user")
+          test "$restricted" = t
           docker compose -p sweety-ci -f compose.production.yaml exec -T worker node -e "fetch('http://127.0.0.1:4002/internal/metrics',{headers:{Authorization:'Bearer '+process.env.METRICS_TOKEN}}).then(async r=>{if(!r.ok)process.exit(1);const m=await r.json();if(!m.running)process.exit(1);console.log('Worker queue/pool metrics passed')}).catch(()=>process.exit(1))"
           docker compose -p sweety-ci -f compose.production.yaml stop worker
           docker compose -p sweety-ci -f compose.production.yaml exec -T postgres pg_dump -U sweety_owner -Fc sweety > backup.dump

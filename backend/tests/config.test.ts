@@ -30,3 +30,17 @@ test('proxy trust accepts explicit IP ranges and rejects blanket trust', () => {
     assert.throws(() => loadConfig({ ...env, TRUST_PROXY: value }), /trusted proxy/);
   assert.deepEqual(loadConfig(env).TRUST_PROXY, []);
 });
+
+test('malformed optional Redis URLs produce sanitized configuration errors', () => {
+  for (const key of ['REDIS_URL', 'REPORT_CACHE_REDIS_URL', 'RATE_LIMIT_REDIS_URL']) {
+    assert.throws(
+      () => loadConfig({ ...env, [key]: 'synthetic-private-value' }),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /Invalid configuration/);
+        assert.equal(error.message.includes('synthetic-private-value'), false);
+        return true;
+      },
+    );
+  }
+});
