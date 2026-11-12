@@ -143,7 +143,7 @@ Password recovery, email verification, patient timezones and more physical-devic
 
 ## Production build
 
-Build both projects with the commands above. From `backend/`, run `node dist/db/migrate-cli.js` once as a release step. Start with `npm start --prefix backend`; serve `frontend/dist` through a web server and proxy `/api` to the API on the same public origin. Use HTTPS, `NODE_ENV=production`, the exact public `APP_ORIGIN`, a private database and deployment-managed credentials. Add static security headers at the web server. Do not seed demo accounts in production. No live deployment is claimed.
+Build both projects with the commands above. From `backend/`, run `node dist/db/migrate-cli.js` once as a release step. Start with `npm start --prefix backend`; serve `frontend/dist` through a web server and proxy `/api` to the API on the same public origin. Use HTTPS, `NODE_ENV=production`, the exact public `APP_ORIGIN`, a private database and deployment-managed credentials. Add static security headers at the web server. Do not run the development seed CLI in production. The public assessment demo uses the same-origin Node hosting option described in [Render deployment notes](docs/RENDER.md).
 
 ## Submission
 
@@ -197,7 +197,7 @@ The [hardening evidence](docs/HARDENING.md) tracks the senior review and its reg
 
 Password hashing runs on bounded worker threads. Multiple API processes require shared Redis authentication limits and explicit trusted proxies. Configured process pools must fit a declared PostgreSQL connection budget; per-process request queues are bounded. Reminder work checkpoints each batch, and cleanup removes expired sessions/old reminder logs without deleting patient readings.
 
-See [deployment and recovery](docs/OPERATIONS.md) for the production Compose setup, independent database roles, HTTPS, metrics, connection budgets, maintenance, backup/restore and coordinated rollback. The production container checks run in GitHub Actions because Docker is unavailable on the local Windows machine. A public production deployment is a separate action.
+See [deployment and recovery](docs/OPERATIONS.md) for the production Compose setup, independent database roles, HTTPS, metrics, connection budgets, maintenance, backup/restore and coordinated rollback. The production container checks run in GitHub Actions because Docker is unavailable on the local Windows machine. The public assessment demo is hosted separately on Render; its free-tier scope and limits are documented in [RENDER.md](docs/RENDER.md).
 
 ```sh
 npm run bench:local --prefix backend
