@@ -7,7 +7,7 @@ This tracks the eight findings from the senior engineering review. Completion re
 - [x] Bounded password hashing away from the API main thread.
 - [x] Shared authentication rate limits and explicit trusted-proxy configuration.
 - [x] Database connection budgets, bounded admission and overload handling.
-- [ ] Batched maintenance/reminders with resumable progress and retention.
+- [x] Batched maintenance/reminders with resumable progress and retention.
 - [x] Reading-change synchronization and protection against outdated edits.
 - [ ] Timing/queue/pool visibility, bounded load checks and recovery/deployment procedures.
 
@@ -26,3 +26,15 @@ Password work runs on bounded Node worker threads, preserves bcrypt cost 12 and 
 The PostgreSQL/unit suite passes 41 tests, including simultaneous versioned edits, configuration budget checks, bounded/expired/disconnected request queues, protected metrics and draining readiness. Eight real Redis/BullMQ integration tests pass, including two API instances sharing an allowance, explicit proxy-client separation and a disconnected rate-limit client failing closed. Six desktop/mobile browser checks pass for cross-tab reading refresh, stale-edit rejection, preserving drafts, external updates via explicit refresh and concurrent submissions. Responsive account checks also pass at the existing audit widths. Migration 004 adds reading versions; existing clients must include the returned version in PUT requests.
 
 Connection-budget validation uses declared maximum process counts, including deployment overlap. It does not discover replicas automatically; deployment configuration must keep those declarations accurate. Production capacity still requires measurement. Metrics/load/recovery and maintenance work remain open below.
+
+## Verified: durable, bounded background work
+
+Migration 005 adds one reminder checkpoint per date and a retention index. Reminder batches commit their event inserts and cursor together; retries resume from the last committed cursor. Integration checks interrupt a run, resume concurrently and verify exact counts without duplicates. Cleanup removes bounded batches of expired sessions and old reminder/checkpoint records, resumes on the next invocation, and preserves active sessions/readings. The Redis worker schedules cleanup hourly; PostgreSQL-only deployments can schedule `npm run maintenance:run --prefix backend`. Defaults are 500 rows/users per batch, 20 cleanup batches per invocation and 90-day reminder-log retention. Patient readings are not subject to that cleanup.
+
+Protected worker metrics expose queue counts, database pool pressure and the latest aggregate checkpoint on loopback port 4002 when METRICS_TOKEN is configured. Scheduled jobs anchor their date to BullMQ's due time, preserving it across delayed execution/retries. Jobs older than reminder retention are skipped to prevent resurrecting pruned logs.
+
+## Local workload baseline
+
+`npm run bench:local --prefix backend` creates a disposable schema and its own loopback API. It cannot target a third-party server. The 306-request reading/report workload passed at 2, 5 and 10 concurrent synthetic users with four PostgreSQL connections and an active-request cap of eight. Observed client p95 latency was 55, 23 and 46 ms respectively; server errors were zero. These short local measurements do not establish a production capacity limit. JSON evidence is written to backend/.local/load-check.json and will be collected in CI.
+
+Remaining verification: production container startup/browser workflow, database backup/restore, explicit rollback/recovery instructions, final full regression/CI run. Docker is unavailable on this Windows machine; container checks must run in GitHub Actions.

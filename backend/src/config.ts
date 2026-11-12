@@ -67,6 +67,10 @@ const schema = z
         )
         .optional(),
     ),
+    MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(500),
+    MAINTENANCE_MAX_BATCHES: z.coerce.number().int().min(1).max(100).default(20),
+    REMINDER_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+    WORKER_METRICS_PORT: z.coerce.number().int().min(1).max(65535).default(4002),
     REMINDER_HOUR: z.coerce.number().int().min(0).max(23).default(21),
     API_MAX_CONCURRENT: z.coerce.number().int().min(1).max(256).default(32),
     API_MAX_QUEUED: z.coerce.number().int().min(0).max(512).default(64),

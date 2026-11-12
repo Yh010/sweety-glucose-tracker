@@ -67,14 +67,12 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _req, res, _ne
   );
   if (unavailable) {
     res.setHeader('Retry-After', '1');
-    res
-      .status(503)
-      .json({
-        error: {
-          code: 'DATABASE_BUSY',
-          message: 'The service is temporarily busy. Please try again shortly.',
-        },
-      });
+    res.status(503).json({
+      error: {
+        code: 'DATABASE_BUSY',
+        message: 'The service is temporarily busy. Please try again shortly.',
+      },
+    });
     return;
   }
   res.status(500).json({

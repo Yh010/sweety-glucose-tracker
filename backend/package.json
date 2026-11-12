@@ -17,6 +17,8 @@
     "db:local": "tsx scripts/local-db.ts",
     "worker": "tsx src/worker.ts",
     "worker:start": "node dist/worker.js",
+    "bench:local": "tsx scripts/load-check.ts",
+    "maintenance:run": "tsx src/modules/reminders/maintenance-cli.ts",
     "reminders:run": "tsx src/modules/reminders/run-cli.ts",
     "test:extras": "tsx --test tests/extras.integration.ts",
     "serve:e2e": "tsx scripts/e2e-server.ts"

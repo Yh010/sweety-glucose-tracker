@@ -5,5 +5,5 @@
     "noUncheckedIndexedAccess": true, "forceConsistentCasingInFileNames": true,
     "outDir": "dist", "sourceMap": true
   },
-  "include": ["src", "tests", "scripts/e2e-server.ts", "scripts/e2e-cleanup.ts"]
+  "include": ["src", "tests", "scripts/load-check.ts", "scripts/e2e-server.ts", "scripts/e2e-cleanup.ts"]
 }

@@ -11,6 +11,9 @@ import { migrate } from '../src/db/migrate.js';
 import { createApp } from '../src/app.js';
 import { ReportCache } from '../src/infrastructure/report-cache.js';
 import { getReport } from '../src/modules/reports/service.js';
+import { startWorkerMetrics } from '../src/modules/reminders/metrics.js';
+import { todayInZone } from '../src/lib/dates.js';
+import { runMaintenance } from '../src/modules/reminders/maintenance.js';
 import { logDailyReminders } from '../src/modules/reminders/process.js';
 import {
   createReminderQueue,
@@ -95,6 +98,7 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
   beforeEach(async () => {
     const keys = await redis.keys(`${prefix}:reports:*`);
     if (keys.length) await redis.del(...keys);
+    await pool.query('DELETE FROM reminder_runs');
     await pool.query('DELETE FROM reminder_events');
     await pool.query('DELETE FROM readings');
     await pool.query('UPDATE users SET report_version=report_version+1');
@@ -270,6 +274,83 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
     const empty = await call('/reports/export?date=2026-09-01&period=daily');
     assert.equal((await empty.text()).trim().split('\r\n').length, 1);
   });
+  test('reminder checkpoints survive an interrupted batch and concurrent retries do not duplicate', async () => {
+    let stopped = false;
+    await assert.rejects(
+      logDailyReminders(pool, '2026-10-15', {
+        batchSize: 1,
+        onBatch: async (progress) => {
+          if (!progress.completed && !stopped) {
+            stopped = true;
+            throw new Error('synthetic worker interruption');
+          }
+        },
+      }),
+      /synthetic worker interruption/,
+    );
+    const partial = (
+      await pool.query('SELECT processed,completed FROM reminder_runs WHERE date=$1', [
+        '2026-10-15',
+      ])
+    ).rows[0];
+    assert.equal(Number(partial.processed), 1);
+    assert.equal(partial.completed, false);
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS count FROM reminder_events')).rows[0].count,
+      1,
+    );
+    const resumed = await Promise.all([
+      logDailyReminders(pool, '2026-10-15', { batchSize: 1 }),
+      logDailyReminders(pool, '2026-10-15', { batchSize: 1 }),
+    ]);
+    assert.equal(
+      resumed.reduce((a, b) => a + b, 0),
+      2,
+    );
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS count FROM reminder_events')).rows[0].count,
+      3,
+    );
+    assert.equal((await pool.query('SELECT completed FROM reminder_runs')).rows[0].completed, true);
+    assert.equal(await logDailyReminders(pool, '2026-10-15', { batchSize: 1 }), 0);
+  });
+  test('maintenance is bounded, resumes on the next invocation and preserves active sessions and readings', async () => {
+    await add(123);
+    await pool.query(
+      `INSERT INTO sessions(token_hash,user_id,expires_at) SELECT md5(i::text)||md5('synthetic-'||i::text),$1,now()-interval '1 day' FROM generate_series(1,5) i`,
+      [alice.id],
+    );
+    await pool.query(
+      `INSERT INTO reminder_events(user_id,date,reading_count) SELECT $1,'2020-01-01'::date+i,0 FROM generate_series(1,5) i`,
+      [alice.id],
+    );
+    await pool.query(
+      `INSERT INTO reminder_runs(date,completed) SELECT '2020-01-01'::date+i,true FROM generate_series(1,5) i`,
+    );
+    const first = await runMaintenance(pool, {
+      today: '2026-11-12',
+      batchSize: 2,
+      maxBatches: 1,
+      retentionDays: 90,
+    });
+    assert.deepEqual(first, { sessions: 2, reminders: 2, runs: 2, more: true });
+    const rest = await runMaintenance(pool, {
+      today: '2026-11-12',
+      batchSize: 2,
+      maxBatches: 4,
+      retentionDays: 90,
+    });
+    assert.deepEqual(rest, { sessions: 3, reminders: 3, runs: 3, more: false });
+    assert.equal((await call('/auth/me')).status, 200);
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS count FROM readings')).rows[0].count,
+      1,
+    );
+    assert.equal(
+      (await runMaintenance(pool, { today: '2026-11-12', batchSize: 2, maxBatches: 1 })).sessions,
+      0,
+    );
+  });
   test('reminder logs exclude complete days and do not duplicate on retries', async () => {
     await add(100);
     await add(110, 'after_lunch');
@@ -294,16 +375,34 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       connection: eventConnection,
       prefix: queuePrefix,
     });
+    let metricsServer: Server | undefined;
     try {
       await Promise.all([
         producer.queue.waitUntilReady(),
         consumer.worker.waitUntilReady(),
         events.waitUntilReady(),
       ]);
-      const job = await producer.queue.add('daily-reminders', { date: '2026-10-15' });
+      const metricsToken = 'synthetic-worker-metrics-token-12345';
+      metricsServer = await startWorkerMetrics(
+        { token: metricsToken, port: 0 },
+        producer.queue,
+        pool,
+        () => consumer.worker.isRunning(),
+      );
+      const address = metricsServer!.address();
+      assert.ok(address && typeof address === 'object');
+      const metricsUrl = `http://127.0.0.1:${address.port}/internal/metrics`;
+      assert.equal((await fetch(metricsUrl)).status, 401);
+      const snapshot = await (
+        await fetch(metricsUrl, { headers: { Authorization: `Bearer ${metricsToken}` } })
+      ).json();
+      assert.equal(snapshot.running, true);
+      assert.equal(snapshot.jobs.active, 0);
+      const date = todayInZone('Asia/Kolkata');
+      const job = await producer.queue.add('daily-reminders', { date });
       const result = await job.waitUntilFinished(events, 15000);
       assert.equal(result.count, 3);
-      const retry = await producer.queue.add('daily-reminders', { date: '2026-10-15' });
+      const retry = await producer.queue.add('daily-reminders', { date });
       assert.equal((await retry.waitUntilFinished(events, 15000)).count, 0);
       await producer.queue.upsertJobScheduler(
         'daily-test',
@@ -314,6 +413,8 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       assert.equal(scheduler?.pattern, '0 21 * * *');
       assert.equal(scheduler?.tz, 'Asia/Kolkata');
     } finally {
+      if (metricsServer)
+        await new Promise<void>((resolve) => metricsServer!.close(() => resolve()));
       await consumer.worker.close();
       await events.close();
       eventConnection.disconnect();
