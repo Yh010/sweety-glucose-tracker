@@ -14,6 +14,8 @@ export const cachedReportSchema = z
       lowest: value,
       average: value,
     }),
-    readings: z.array(readingSchema.extend({ id: z.string().uuid() })).max(124),
+    readings: z
+      .array(readingSchema.extend({ id: z.string().uuid(), version: z.number().int().positive() }))
+      .max(124),
   })
   .refine((report) => report.summary.count === report.readings.length);

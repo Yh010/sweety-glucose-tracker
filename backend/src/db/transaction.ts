@@ -12,6 +12,7 @@ export async function transaction<T>(
     let broken = false;
     try {
       await client.query('BEGIN');
+      await client.query("SET LOCAL lock_timeout = '2s'");
       const result = await work(client);
       await client.query('COMMIT');
       return result;

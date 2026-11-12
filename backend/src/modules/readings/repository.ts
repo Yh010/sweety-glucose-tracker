@@ -9,6 +9,7 @@ export async function saveReading(
   userId: string,
   input: ReadingInput,
   id?: string,
+  expectedVersion?: number,
 ): Promise<Reading> {
   try {
     return await transaction(pool, async (client) => {
@@ -16,10 +17,16 @@ export async function saveReading(
       await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
       if (id) {
         const existing = await client.query(
-          'SELECT id FROM readings WHERE id = $1 AND user_id = $2',
+          'SELECT id,version FROM readings WHERE id = $1 AND user_id = $2',
           [id, userId],
         );
         if (!existing.rowCount) throw new AppError(404, 'NOT_FOUND', 'Reading not found.');
+        if (existing.rows[0].version !== expectedVersion)
+          throw new AppError(
+            409,
+            'STALE_READING',
+            'This reading changed elsewhere. Cancel editing and reopen it to see the latest value. Your draft is still here.',
+          );
       }
       const count = await client.query<{ count: number }>(
         'SELECT count(*)::int AS count FROM readings WHERE user_id = $1 AND date = $2 AND ($3::uuid IS NULL OR id <> $3)',
@@ -29,13 +36,19 @@ export async function saveReading(
         throw new AppError(409, 'DAILY_LIMIT', 'You can add only 4 readings per day.');
       const result = id
         ? await client.query<Reading>(
-            'UPDATE readings SET date=$1, slot=$2, value=$3, updated_at=now() WHERE id=$4 AND user_id=$5 RETURNING id, date, slot, value',
-            [input.date, input.slot, input.value, id, userId],
+            'UPDATE readings SET date=$1, slot=$2, value=$3, updated_at=now(), version=version+1 WHERE id=$4 AND user_id=$5 AND version=$6 RETURNING id, date, slot, value, version',
+            [input.date, input.slot, input.value, id, userId, expectedVersion],
           )
         : await client.query<Reading>(
-            'INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5) RETURNING id,date,slot,value',
+            'INSERT INTO readings(id,user_id,date,slot,value) VALUES($1,$2,$3,$4,$5) RETURNING id,date,slot,value,version',
             [randomUUID(), userId, input.date, input.slot, input.value],
           );
+      if (!result.rowCount)
+        throw new AppError(
+          409,
+          'STALE_READING',
+          'This reading changed elsewhere. Cancel editing and reopen it to see the latest value.',
+        );
       await client.query('UPDATE users SET report_version=report_version+1 WHERE id=$1', [userId]);
       return result.rows[0]!;
     });

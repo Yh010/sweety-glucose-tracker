@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Passwords } from './passwords.js';
 import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, type Store } from 'express-rate-limit';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { Config } from '../../config.js';
@@ -30,9 +30,15 @@ const registration = z
   .strict();
 const login = z.object({ email, password: z.string().min(1).max(256) }).strict();
 
-export function authRoutes(pool: Pool, config: Config, passwords: Passwords): Router {
+export function authRoutes(
+  pool: Pool,
+  config: Config,
+  passwords: Passwords,
+  rateStore?: Store,
+): Router {
   const router = Router();
   const limiter = rateLimit({
+    store: rateStore,
     windowMs: 15 * 60 * 1000,
     limit: config.AUTH_RATE_LIMIT,
     standardHeaders: 'draft-8',

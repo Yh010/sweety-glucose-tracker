@@ -42,7 +42,7 @@ it('shows server conflicts and preserves the entry for correction', () => {
   render(
     <ReadingForm
       {...defaults}
-      editing={{ id: 'abc', date: '2026-11-10', slot: 'after_lunch', value: 130 }}
+      editing={{ id: 'abc', version: 1, date: '2026-11-10', slot: 'after_lunch', value: 130 }}
       error={
         new ApiError(
           409,
@@ -62,7 +62,7 @@ it('disables changes while saving and offers cancellation when editing', async (
   rerender(
     <ReadingForm
       {...defaults}
-      editing={{ id: 'abc', date: '2026-11-10', slot: 'fasting', value: 100 }}
+      editing={{ id: 'abc', version: 1, date: '2026-11-10', slot: 'fasting', value: 100 }}
     />,
   );
   await userEvent.click(screen.getByText('Cancel editing', { exact: true }));

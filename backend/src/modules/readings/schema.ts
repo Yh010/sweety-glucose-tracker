@@ -19,6 +19,9 @@ export const readingSchema = z
       .max(600, 'Value must be between 40 and 600 mg/dl.'),
   })
   .strict();
+export const updateSchema = readingSchema.extend({
+  version: z.number().int().positive('Reload this reading before saving.'),
+});
 export const listSchema = z
   .object({
     from: dateSchema.optional(),
@@ -29,4 +32,4 @@ export const listSchema = z
   .strict()
   .refine((v) => !v.from || !v.to || v.from <= v.to, 'Start date must be on or before end date.');
 export type ReadingInput = z.infer<typeof readingSchema>;
-export type Reading = ReadingInput & { id: string };
+export type Reading = ReadingInput & { id: string; version: number };

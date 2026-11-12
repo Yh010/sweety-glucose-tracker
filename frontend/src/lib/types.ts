@@ -8,7 +8,7 @@ export const slotLabels: Record<Slot, string> = {
   after_dinner: 'After dinner',
 };
 export type ReadingInput = { date: string; slot: Slot; value: number };
-export type Reading = ReadingInput & { id: string };
+export type Reading = ReadingInput & { id: string; version: number };
 export type Period = 'daily' | 'mtd' | 'monthly';
 export type Report = {
   period: Period;

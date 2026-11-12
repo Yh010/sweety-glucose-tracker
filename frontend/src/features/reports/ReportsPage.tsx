@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { BarChart3, Download, NotebookPen } from 'lucide-react';
+import { BarChart3, RotateCcw, Download, NotebookPen } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Period } from '../../lib/types';
 import { formatDate } from '../../lib/dates';
@@ -67,6 +67,15 @@ export function ReportsPage({ today, onLog }: { today: string; onLog: () => void
             </button>
           ))}
         </div>
+        <button
+          className="text-button"
+          onClick={() => void report.refetch()}
+          disabled={report.isFetching || exportReport.isPending}
+          aria-label="Refresh report"
+        >
+          <RotateCcw size={14} aria-hidden="true" />
+          {report.isFetching ? 'Refreshing...' : 'Refresh'}
+        </button>
         <button
           className="button export-button"
           disabled={exportReport.isPending || report.isFetching || !report.data?.summary.count}

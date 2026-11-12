@@ -94,10 +94,10 @@ export const api = {
   logout: () => request<void>('/auth/logout', { method: 'POST' }),
   readings: (date: string) =>
     request<{ readings: Reading[] }>(`/readings?from=${date}&to=${date}&limit=4`),
-  save: (input: ReadingInput, id?: string) =>
+  save: (input: ReadingInput, id?: string, version?: number) =>
     request<{ reading: Reading }>(`/readings${id ? `/${id}` : ''}`, {
       method: id ? 'PUT' : 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify(id ? { ...input, version } : input),
     }),
   remove: (id: string) => request<void>(`/readings/${id}`, { method: 'DELETE' }),
   exportReport: (date: string, period: Period) =>

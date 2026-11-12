@@ -63,6 +63,7 @@ const reading = (overrides: Record<string, unknown> = {}) => ({
   value: 100,
   ...overrides,
 });
+const update = (overrides: Record<string, unknown> = {}) => reading({ version: 1, ...overrides });
 const add = (overrides: Record<string, unknown> = {}, cookie = aliceCookie) =>
   call('/readings', 'POST', reading(overrides), cookie);
 
@@ -182,7 +183,7 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
       const created = await add();
       const id = created.data.reading.id;
       const [edit, deletion] = await Promise.all([
-        call(`/readings/${id}`, 'PUT', reading({ value: 111 }), aliceCookie),
+        call(`/readings/${id}`, 'PUT', update({ value: 111 }), aliceCookie),
         call(`/readings/${id}`, 'DELETE', undefined, aliceCookie),
       ]);
       assert.ok([200, 404].includes(edit.status));
@@ -230,6 +231,43 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
       /non-retryable/,
     );
     assert.equal(attempts, 1);
+  });
+  test('operational metrics require a secret and readiness fails while draining', async () => {
+    const token = 'synthetic-metrics-token-1234567890';
+    const config = loadConfig({
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: databaseUrl,
+      METRICS_TOKEN: token,
+    });
+    const app = createApp(pool, config);
+    const instance = app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve) => instance.once('listening', resolve));
+    const address = instance.address();
+    assert.ok(address && typeof address === 'object');
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      assert.equal((await fetch(`${url}/internal/metrics`)).status, 401);
+      const health = await fetch(`${url}/api/health`);
+      assert.equal(health.status, 200);
+      assert.ok(health.headers.get('x-request-id'));
+      const response = await fetch(`${url}/internal/metrics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 200);
+      const snapshot = await response.json();
+      assert.ok(snapshot.requests.requests >= 2);
+      assert.equal(typeof snapshot.database.waiting, 'number');
+      assert.equal(typeof snapshot.passwords.running, 'number');
+      assert.equal(snapshot.admission.waiting, 0);
+      app.locals.beginShutdown();
+      assert.equal((await fetch(`${url}/api/health`)).status, 503);
+      assert.equal((await fetch(`${url}/api/live`)).status, 200);
+      assert.equal((await fetch(`${url}/api/meta`)).status, 503);
+    } finally {
+      await new Promise<void>((resolve) => instance.close(() => resolve()));
+      await app.locals.closeServices();
+    }
   });
   test('authentication throttling is enforced without blocking health or profile reads', async () => {
     const config = loadConfig({
@@ -341,7 +379,7 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
     const updated = await call(
       `/readings/${id}`,
       'PUT',
-      reading({ date: '2026-10-14', slot: 'after_lunch', value: 120 }),
+      update({ date: '2026-10-14', slot: 'after_lunch', value: 120 }),
       aliceCookie,
     );
     assert.equal(updated.status, 200);
@@ -392,24 +430,44 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
     ]);
     assert.equal(total.rows[0].count, 4);
   });
+  test('outdated edits are rejected and the latest version is preserved', async () => {
+    const created = await add();
+    assert.equal(created.data.reading.version, 1);
+    const path = `/readings/${created.data.reading.id}`;
+    const missing = await call(path, 'PUT', reading({ value: 111 }), aliceCookie);
+    assert.equal(missing.status, 400);
+    const results = await Promise.all([
+      call(path, 'PUT', update({ value: 111 }), aliceCookie),
+      call(path, 'PUT', update({ value: 122 }), aliceCookie),
+    ]);
+    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+    assert.equal(results.find((r) => r.status === 409)!.data.error.code, 'STALE_READING');
+    const latest = (
+      await pool.query('SELECT value,version FROM readings WHERE id=$1', [created.data.reading.id])
+    ).rows[0];
+    assert.equal(latest.version, 2);
+    assert.equal(latest.value, results.find((r) => r.status === 200)!.data.reading.value);
+    const saved = await call(
+      path,
+      'PUT',
+      update({ value: 133, version: latest.version }),
+      aliceCookie,
+    );
+    assert.equal(saved.status, 200);
+    assert.equal(saved.data.reading.version, 3);
+  });
   test('editing the same slot succeeds while conflicting edits roll back', async () => {
     const first = await add();
     const second = await add({ slot: 'after_lunch' });
     assert.equal(
-      (
-        await call(
-          `/readings/${first.data.reading.id}`,
-          'PUT',
-          reading({ value: 110 }),
-          aliceCookie,
-        )
-      ).status,
+      (await call(`/readings/${first.data.reading.id}`, 'PUT', update({ value: 110 }), aliceCookie))
+        .status,
       200,
     );
     const conflict = await call(
       `/readings/${first.data.reading.id}`,
       'PUT',
-      reading({ slot: 'after_lunch' }),
+      update({ slot: 'after_lunch', version: 2 }),
       aliceCookie,
     );
     assert.equal(conflict.status, 409);
@@ -422,7 +480,7 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
   test('an edit cannot move a reading into an already full day', async () => {
     for (const slot of slots) await add({ slot });
     const other = await add({ date: '2026-10-14' });
-    const result = await call(`/readings/${other.data.reading.id}`, 'PUT', reading(), aliceCookie);
+    const result = await call(`/readings/${other.data.reading.id}`, 'PUT', update(), aliceCookie);
     assert.equal(result.data.error.code, 'DAILY_LIMIT');
   });
   test('another user cannot see, update or delete a reading, or include it in reports', async () => {
@@ -430,7 +488,7 @@ describe('PostgreSQL-backed API', { concurrency: false }, () => {
     const id = first.data.reading.id;
     assert.equal((await call('/readings', 'GET', undefined, bobCookie)).data.pagination.total, 0);
     assert.equal(
-      (await call(`/readings/${id}`, 'PUT', reading({ value: 500 }), bobCookie)).status,
+      (await call(`/readings/${id}`, 'PUT', update({ value: 500 }), bobCookie)).status,
       404,
     );
     assert.equal((await call(`/readings/${id}`, 'DELETE', undefined, bobCookie)).status, 404);

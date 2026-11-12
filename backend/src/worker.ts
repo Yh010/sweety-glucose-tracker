@@ -4,7 +4,7 @@ import { createReminderQueue, createReminderWorker } from './modules/reminders/q
 
 const config = loadConfig();
 if (!config.REDIS_URL) throw new Error('Set REDIS_URL to run the optional reminder worker.');
-const pool = createPool(config);
+const pool = createPool({ ...config, DB_POOL_SIZE: config.DB_WORKER_POOL_SIZE });
 await pool.query('SELECT 1');
 const producer = createReminderQueue(config.REDIS_URL);
 await producer.queue.waitUntilReady();

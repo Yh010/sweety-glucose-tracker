@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Check } from 'lucide-react';
+import { announceReadingChange } from '../../lib/reading-events';
 import { api, ApiError } from '../../lib/api';
 import { slots, type Reading, type ReadingInput, type Slot, type User } from '../../lib/types';
 import { formatDate } from '../../lib/dates';
@@ -30,13 +31,14 @@ export function DailyPage({
     queryFn: () => api.report(date, 'daily'),
   });
   const invalidate = () => {
+    announceReadingChange();
     void client.invalidateQueries({ queryKey: ['reports'] });
     void client.invalidateQueries({ queryKey: ['readings'] });
   };
   const save = useMutation({
     onMutate: () => setNotice(''),
     onError: invalidate,
-    mutationFn: (input: ReadingInput) => api.save(input, editing?.id),
+    mutationFn: (input: ReadingInput) => api.save(input, editing?.id, editing?.version),
     onSuccess: ({ reading }) => {
       setNotice(editing ? 'Reading updated.' : 'Reading saved.');
       setEditing(null);
@@ -148,6 +150,8 @@ export function DailyPage({
                   remove.mutate(reading);
                 }}
                 deleting={remove.isPending || save.isPending}
+                refreshing={report.isFetching}
+                onRefresh={() => void report.refetch()}
               />
               <section className="daily-summary">
                 <div className="section-heading">

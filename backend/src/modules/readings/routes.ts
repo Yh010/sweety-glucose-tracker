@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { todayInZone } from '../../lib/dates.js';
 import { AppError } from '../../lib/errors.js';
-import { listSchema, readingSchema, type Reading } from './schema.js';
+import { listSchema, readingSchema, updateSchema, type Reading } from './schema.js';
 import { saveReading, deleteReading } from './repository.js';
 
 export function readingRoutes(pool: Pool, timezone: string): Router {
@@ -18,7 +18,7 @@ export function readingRoutes(pool: Pool, timezone: string): Router {
       values,
     );
     const readings = await pool.query<Reading>(
-      `SELECT id,date,slot,value FROM readings WHERE ${where} ORDER BY date DESC, CASE slot WHEN 'fasting' THEN 0 WHEN 'after_breakfast' THEN 1 WHEN 'after_lunch' THEN 2 ELSE 3 END LIMIT $4 OFFSET $5`,
+      `SELECT id,date,slot,value,version FROM readings WHERE ${where} ORDER BY date DESC, CASE slot WHEN 'fasting' THEN 0 WHEN 'after_breakfast' THEN 1 WHEN 'after_lunch' THEN 2 ELSE 3 END LIMIT $4 OFFSET $5`,
       [...values, query.limit, (query.page - 1) * query.limit],
     );
     res.json({
@@ -34,10 +34,10 @@ export function readingRoutes(pool: Pool, timezone: string): Router {
   });
   router.put('/:id', async (req, res) => {
     const id = z.uuid('Invalid reading ID.').parse(req.params.id);
-    const input = readingSchema.parse(req.body);
+    const input = updateSchema.parse(req.body);
     if (input.date > todayInZone(timezone))
       throw new AppError(400, 'FUTURE_DATE', 'Date cannot be in the future.');
-    res.json({ reading: await saveReading(pool, req.user!.id, input, id) });
+    res.json({ reading: await saveReading(pool, req.user!.id, input, id, input.version) });
   });
   router.delete('/:id', async (req, res) => {
     const id = z.uuid('Invalid reading ID.').parse(req.params.id);

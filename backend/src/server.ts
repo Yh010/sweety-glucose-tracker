@@ -11,10 +11,14 @@ const app = createApp(pool, config, reportCache?.cache);
 const server = app.listen(config.PORT, () =>
   console.log(`Sweety API listening on port ${config.PORT}`),
 );
+server.requestTimeout = 30000;
+server.headersTimeout = 10000;
+server.keepAliveTimeout = 5000;
 let stopping = false;
 function shutdown() {
   if (stopping) return;
   stopping = true;
+  app.locals.beginShutdown();
   const timeout = setTimeout(() => process.exit(1), 10000).unref();
   server.close(() => {
     reportCache?.close();

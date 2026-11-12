@@ -113,6 +113,58 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       await admin.end();
     }
   });
+  test('two API instances share authentication limits and trusted proxies preserve distinct clients', async () => {
+    const config = loadConfig({
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: databaseUrl,
+      RATE_LIMIT_REDIS_URL: redisUrl,
+      RATE_LIMIT_PREFIX: `${prefix}:limits`,
+      AUTH_RATE_LIMIT: '2',
+      TRUST_PROXY: '127.0.0.1/32',
+    });
+    const apps = [createApp(pool, config), createApp(pool, config)];
+    const servers = apps.map((app) => app.listen(0, '127.0.0.1'));
+    await Promise.all(
+      servers.map((server) => new Promise<void>((resolve) => server.once('listening', resolve))),
+    );
+    const urls = servers.map((server) => {
+      const address = server.address();
+      assert.ok(address && typeof address === 'object');
+      return `http://127.0.0.1:${address.port}`;
+    });
+    const attempt = (index: number, ip = '192.0.2.10') =>
+      fetch(`${urls[index]}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'Sweety',
+          'X-Forwarded-For': ip,
+        },
+        body: '{}',
+      });
+    try {
+      assert.equal((await attempt(0)).status, 400);
+      assert.equal((await attempt(1)).status, 400);
+      const blocked = await attempt(0);
+      assert.equal(blocked.status, 429);
+      assert.ok(blocked.headers.get('retry-after'));
+      assert.equal((await attempt(1, '192.0.2.11')).status, 400);
+      const keys = await redis.keys(`${prefix}:limits:*`);
+      assert.equal(keys.length, 2);
+      assert.ok((await redis.pttl(keys[0]!)) > 0);
+      apps[0]!.locals.rateLimitStore.shutdown();
+      const unavailable = await attempt(0, '192.0.2.12');
+      assert.equal(unavailable.status, 503);
+      assert.equal((await unavailable.json()).error.code, 'RATE_LIMIT_UNAVAILABLE');
+      assert.equal((await fetch(`${urls[0]}/api/health`)).status, 200);
+    } finally {
+      await Promise.all(
+        servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+      );
+      await Promise.all(apps.map((app) => app.locals.closeServices()));
+    }
+  });
   test('a full 31-day month keeps all 124 entries in reports, CSV and pagination', async () => {
     await pool.query(
       `INSERT INTO readings(id,user_id,date,slot,value)
@@ -171,6 +223,7 @@ describe('real PostgreSQL + Redis + BullMQ extras', { concurrency: false }, () =
       date: '2026-10-15',
       slot: 'fasting',
       value: 150,
+      version: created.version,
     });
     // Simulate an old request finishing its cache write after the mutation committed.
     await cache.set(keys[0]!.slice(`${prefix}:reports:`.length), first);

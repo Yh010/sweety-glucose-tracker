@@ -37,7 +37,7 @@ export async function getReport(
   }>(
     `
     WITH selected AS (
-      SELECT id,date,slot,value FROM readings WHERE user_id=$1 AND date BETWEEN $2::date AND $3::date
+      SELECT id,date,slot,value,version FROM readings WHERE user_id=$1 AND date BETWEEN $2::date AND $3::date
     ) SELECT count(*)::int AS count, max(value) AS highest, min(value) AS lowest,
       round(avg(value),1)::text AS average,
       coalesce(json_agg(selected ORDER BY date, CASE slot WHEN 'fasting' THEN 0 WHEN 'after_breakfast' THEN 1 WHEN 'after_lunch' THEN 2 ELSE 3 END),'[]'::json) AS readings

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, advanceSession } from './lib/api';
+import { readingChangeKey } from './lib/reading-events';
 import type { User } from './lib/types';
 import { AppShell, type View } from './components/AppShell';
 import { ErrorState, Loading } from './components/Feedback';
@@ -44,6 +45,11 @@ export default function App() {
   });
   useEffect(() => {
     function synchronize(event: StorageEvent) {
+      if (event.key === readingChangeKey) {
+        void client.invalidateQueries({ queryKey: ['reports'] });
+        void client.invalidateQueries({ queryKey: ['readings'] });
+        return;
+      }
       if (event.key !== 'sweety-session-change') return;
       advanceSession();
       void client.cancelQueries().then(() => {
@@ -52,6 +58,7 @@ export default function App() {
         });
         client.setQueryData(['me'], null);
         setView('daily');
+        setExpired(false);
         void client.invalidateQueries({ queryKey: ['me'] });
       });
     }

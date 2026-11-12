@@ -36,6 +36,8 @@ test('two tabs submitting the same slot create exactly one reading', async ({ pa
   ]);
   await expect(page.getByText('1 of 4 recorded')).toBeVisible();
   await expect(other.getByText('1 of 4 recorded')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save reading', exact: true })).toBeEnabled();
+  await expect(other.getByRole('button', { name: 'Save reading', exact: true })).toBeEnabled();
   const errors = await Promise.all([
     page.getByRole('alert').count(),
     other.getByRole('alert').count(),
