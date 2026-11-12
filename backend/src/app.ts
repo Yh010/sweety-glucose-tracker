@@ -1,4 +1,5 @@
 import express from 'express';
+import { resolve } from 'node:path';
 import { AuthRateStore } from './infrastructure/auth-rate-store.js';
 import { Passwords } from './modules/auth/passwords.js';
 import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
@@ -15,7 +16,12 @@ import { readingRoutes } from './modules/readings/routes.js';
 import type { ReportCache } from './infrastructure/report-cache.js';
 import { reportRoutes } from './modules/reports/routes.js';
 
-export function createApp(pool: Pool, config: Config, cache?: ReportCache) {
+export function createApp(
+  pool: Pool,
+  config: Config,
+  cache?: ReportCache,
+  frontendDirectory?: string,
+) {
   const app = express();
   const passwords = new Passwords(config.HASH_WORKERS, config.HASH_QUEUE_LIMIT);
   const rateStore = config.RATE_LIMIT_REDIS_URL
@@ -120,6 +126,27 @@ export function createApp(pool: Pool, config: Config, cache?: ReportCache) {
   app.use('/api/auth', authRoutes(pool, config, passwords, rateStore));
   app.use('/api/readings', requireAuth(pool), readingRoutes(pool, config.APP_TIMEZONE));
   app.use('/api/reports', requireAuth(pool), reportRoutes(pool, config.APP_TIMEZONE, cache));
+  if (frontendDirectory) {
+    const directory = resolve(frontendDirectory);
+    app.use((req, res, next) => {
+      if (/^\/(api|internal)(\/|$)/.test(req.path)) return next();
+      res.set(
+        'Content-Security-Policy',
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      );
+      next();
+    });
+    app.use(express.static(directory, { index: false, redirect: false }));
+    app.get('/{*path}', (req, res, next) => {
+      if (
+        /^\/(api|internal)(\/|$)/.test(req.path) ||
+        !req.accepts('html') ||
+        /\.[^/]+$/.test(req.path)
+      )
+        return next();
+      res.sendFile(resolve(directory, 'index.html'));
+    });
+  }
   app.use((_req, _res, next) => next(new AppError(404, 'NOT_FOUND', 'Endpoint not found.')));
   app.use(errorHandler);
   return app;
