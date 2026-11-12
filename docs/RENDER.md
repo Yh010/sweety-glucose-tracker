@@ -10,7 +10,7 @@ This is a single-process assessment demo. Authentication throttles are process-l
 
 Free web services sleep after 15 minutes without traffic, so the first request can take longer. Free PostgreSQL expires 30 days after creation. Back up any data before expiry. Use synthetic readings for the public assessment demo.
 
-No demo account is silently inserted into production. Reviewers can register through the app. The local development seed remains available separately.
+The development seed CLI is disabled in production. The hosted synthetic sample account was created through the application's registration and reading APIs for the walkthrough; its verified sign-in credentials are supplied separately in the assessment email. Reviewers can also register their own account. The local development seed remains available separately.
 
 Deploy through Render's **New > Blueprint**, connect the public GitHub repository, select `main`, and review that both resources show **Free** before deploying. No payment method or paid upgrade is needed for this configuration.
 

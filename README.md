@@ -2,7 +2,9 @@
 
 A private blood glucose journal for the Kenpath assessment. Record four meal-based readings per day and review daily, month-to-date and previous-month reports.
 
-**Live assessment demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account to try it. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
+**Live assessment demo:** [Open Sweety](https://sweety-glucose-tracker-kagf.onrender.com/). Create an account or use the sample account below. The free service can take about a minute to wake up after inactivity; its free database expires 30 days after creation. See [Render deployment notes](docs/RENDER.md) for the demo limits and full production alternative.
+
+Hosted demo sign-in details are supplied separately in the assessment email. The sample account shown in the walkthrough has current-month and previous-month readings; login and all three report periods were verified on 12 November 2026. The local seed credentials below are separate.
 
 **Submission evidence:** [Video, screenshots and verification](docs/SUBMISSION.md).
 

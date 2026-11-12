@@ -1,10 +1,14 @@
 # Submission evidence
 
-- [Live app](https://sweety-glucose-tracker-kagf.onrender.com/) — register an account to try it.
+- [Live app](https://sweety-glucose-tracker-kagf.onrender.com/) — use the sample account below or register your own.
 - [Download the video and screenshot pack](https://github.com/Yh010/sweety-glucose-tracker/releases/tag/assessment-submission).
 - [Successful full CI run](https://github.com/Yh010/sweety-glucose-tracker/actions/runs/43164276779).
 
 The pack contains a 2 minute 2 second recording of the deployed app, optional captions, 12 desktop/mobile screenshots, a CSV exported through the UI, and verification/checksum files. All demonstrated accounts and readings are synthetic.
+
+The assessment email supplies verified hosted demo sign-in details separately. The sample account includes readings for the current and previous calendar months; login and all three reports were checked on 12 November 2026. Local development seeding uses the separate credentials documented in the root README.
+
+Reply to the original assessment email thread by Saturday, 14 November 2026, with the repository link and screenshots or recording. This guide does not send that email.
 
 The walkthrough covers registration, validation, all four reading slots, the daily limit, editing, daily reports, CSV export, confirmed deletion, historical readings, month-to-date trends, the complete previous month, and logout. Mobile screenshots cover the daily log and reports. The recording is silent and preserves the real interface.
 
